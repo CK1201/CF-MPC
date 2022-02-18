@@ -17,15 +17,19 @@ def flatten(Mat):
 
 def crossmat(vec):
     if isinstance(vec, np.ndarray):
-        return np.array[
+        return np.array([
             [0      , -vec[2], vec[1] ],
             [vec[2] , 0      , -vec[0]],
-            [-vec[1], vec[0] , 0      ]]
+            [-vec[1], vec[0] , 0      ]])
     else:
         return ca.vertcat(
             ca.horzcat(0      , -vec[2], vec[1] ),
             ca.horzcat(vec[2] , 0      , -vec[0]),
             ca.horzcat(-vec[1], vec[0] , 0      ))
+
+def v1_cross_v2(vec1, vec2):
+    vec_mat = crossmat(vec1)
+    return np.dot(vec_mat, vec2.T)
 
 def unit_quat(q):
     if isinstance(q, np.ndarray):
@@ -33,7 +37,6 @@ def unit_quat(q):
     else:
         q_norm = ca.sqrt(ca.sumsqr(q))
     return q / q_norm
-
 
 def v_dot_q(v, q):
     rot_mat = quat_to_rotation_matrix(q)

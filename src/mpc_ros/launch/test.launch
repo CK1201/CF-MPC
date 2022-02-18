@@ -1,9 +1,7 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <!-- <include file="$(find rotors_gazebo)/launch/mav_hovering_example.launch">
-        <arg name="mav_name" value="$(arg mav_name)"/>
-        <arg name="world_name" value="basic"/>
-    </include> -->
+    <include file="$(find mpc_ros)/launch/quadrotor_empty_world.launch">
+    </include>
 
     <node pkg="mpc_ros" type="mpc_node.py" name="mpc_node" output="screen">
         <param name="quad_name" value="$(arg mav_name)"/>

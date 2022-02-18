@@ -70,7 +70,7 @@ class QuadrotorModel:
         # u
         RotorSpeed = ca.SX.sym("RotorSpeed", 4, 1)
         temp_input = self.G @ (RotorSpeed ** 2)
-        print(temp_input[0])
+        # print(temp_input[0])
         
         # algebraic variables
         # z = ca.vertcat([])
@@ -97,10 +97,10 @@ class QuadrotorModel:
             1 / 2 * skew_symmetric(BodyRate) @ Orientation,
             ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:])
         )
-        print("vdot")
-        print(v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g)
-        print("wdot")
-        print(ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:]))
+        # print("vdot")
+        # print(v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g)
+        # print("wdot")
+        # print(ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:]))
         
         # con_h
         con_h = None

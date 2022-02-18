@@ -8,6 +8,7 @@
 
   <arg name="x_init" default="0"/>
   <arg name="y_init" default="0"/>
+  <arg name="z_init" default="0"/>
 
   <arg name="use_mpc" default="false"/>
   <arg name="enable_logging" default="false" />
@@ -40,6 +41,7 @@
 
     <arg name="x_init" value="$(arg x_init)"/>
     <arg name="y_init" value="$(arg y_init)"/>
+    <arg name="z_init" value="$(arg z_init)"/>
   </include>
 
 </launch>

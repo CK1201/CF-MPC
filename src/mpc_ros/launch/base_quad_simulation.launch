@@ -18,6 +18,7 @@
 
   <arg name="x_init"/>
   <arg name="y_init"/>
+  <arg name="z_init"/>
 
   <arg name="debug"/>
   <arg name="verbose"/>
@@ -45,6 +46,7 @@
       <arg name="log_file" value="$(arg log_file)"/>
       <arg name="x" value="$(arg x_init)" />
       <arg name="y" value="$(arg y_init)" />
+      <arg name="z" value="$(arg z_init)" />
     </include>
   </group>
 
@@ -141,10 +143,6 @@
         name="manual_flight_assistant" output="screen">
       <rosparam file="$(find rpg_rotors_interface)/parameters/manual_flight_assistant.yaml"/>
     </node> -->
-
-    <node name="rqt_quad_gui" pkg="rqt_gui" type="rqt_gui" 
-        args="-s rqt_quad_gui.basic_flight.BasicFlight --args 
-        --quad_name $(arg quad_name)" output="screen"/>
 
   </group> 
 
