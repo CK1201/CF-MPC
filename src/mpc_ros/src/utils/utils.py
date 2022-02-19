@@ -60,11 +60,11 @@ def quat_to_rotation_matrix(quaternions):
 
 def skew_symmetric(v):
     if isinstance(v, np.ndarray):
-        return np.array[
+        return np.array([
             [0   , -v[0], -v[1], -v[2]],
             [v[0], 0    , v[2] , -v[1]],
             [v[1], -v[2], 0    , v[0] ],
-            [v[2], v[1] , -v[0], 0    ]]
+            [v[2], v[1] , -v[0], 0    ]])
     else:
         return ca.vertcat(
             ca.horzcat(0   , -v[0], -v[1], -v[2]),

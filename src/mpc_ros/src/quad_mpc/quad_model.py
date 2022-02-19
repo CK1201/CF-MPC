@@ -131,3 +131,31 @@ class QuadrotorModel:
 
         # define constraints struct
         # self.constraint.expr = ca.vertcat([])
+    
+    def Simulation(self, p0, v0, q0, br0, u, dt):
+        x = [p0, v0, q0, br0]
+        k1 = [self.f_p(x), self.f_v(x, u), self.f_q(x), self.f_br(x, u)]
+        x_aux = [x[i] + dt / 2 * k1[i] for i in range(4)]
+        k2 = [self.f_p(x_aux), self.f_v(x_aux, u), self.f_q(x_aux), self.f_br(x_aux, u)]
+        x_aux = [x[i] + dt / 2 * k2[i] for i in range(4)]
+        k3 = [self.f_p(x_aux), self.f_v(x_aux, u), self.f_q(x_aux), self.f_br(x_aux, u)]
+        x_aux = [x[i] + dt * k3[i] for i in range(4)]
+        k4 = [self.f_p(x_aux), self.f_v(x_aux, u), self.f_q(x_aux), self.f_br(x_aux, u)]
+        x = [x[i] + dt * (1.0 / 6.0 * k1[i] + 2.0 / 6.0 * k2[i] + 2.0 / 6.0 * k3[i] + 1.0 / 6.0 * k4[i]) for i in range(4)]
+        x[2] = unit_quat(x[2])
+        return x
+
+    def f_p(self, x):
+        return x[1]
+
+    def f_v(self, x, u):
+        rotation_mat0 = quat_to_rotation_matrix(x[2])
+        temp_input = np.dot(self.G, u.T ** 2)
+        return -np.array([0, 0, 9.81]) + temp_input[0] / self.mass * rotation_mat0[:, 2]
+        
+    def f_q(self, x):
+        return 1 / 2 * np.dot(skew_symmetric(x[3]), x[2].T)
+
+    def f_br(self, x, u):
+        temp_input = np.dot(self.G, u.T ** 2)
+        return np.dot(np.linalg.inv(self.Inertia), (temp_input[1:] - np.dot(v1_cross_v2(x[3], self.Inertia), x[3].T)).T)

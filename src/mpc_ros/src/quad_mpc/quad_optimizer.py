@@ -54,7 +54,7 @@ class QuadrotorOptimizer:
         # self.ocp.dims.np = np_
 
         # set cost
-        Q = np.diag(np.concatenate((np.ones(3) * 1, np.ones(3) * 0.1, np.ones(4) * 0.01, np.ones(3) * 0.0)))
+        Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.0, np.ones(4) * 0.01, np.ones(3) * 0.0)))
         Q[5, 5] = 0
         R = np.eye(nu) * 0
 
