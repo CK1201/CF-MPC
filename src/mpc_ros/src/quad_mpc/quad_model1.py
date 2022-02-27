@@ -58,17 +58,19 @@ class QuadrotorModel:
         v = ca.SX.sym("V", 3, 1)
         Orientation = ca.SX.sym("Orientation", 4, 1)
         BodyRate = ca.SX.sym("BodyRate", 3, 1)
-        x = ca.vertcat(p, v, Orientation, BodyRate)
+        RotorSpeed = ca.SX.sym("RotorSpeed", 4, 1)
+        x = ca.vertcat(p, v, Orientation, BodyRate, RotorSpeed)
 
         # xdot
         pDot = ca.SX.sym("PDot", 3, 1)
         vDot = ca.SX.sym("VDot", 3, 1)
         OrientationDot = ca.SX.sym("OrientationDot", 4, 1)
         BodyRateDot = ca.SX.sym("BodyRateDot", 3, 1)
-        xdot = ca.vertcat(pDot, vDot, OrientationDot, BodyRateDot)
-
+        RotorSpeedDot = ca.SX.sym("RotorSpeedDot", 4, 1)
+        xdot = ca.vertcat(pDot, vDot, OrientationDot, BodyRateDot, RotorSpeedDot)
+        
         # u
-        RotorSpeed = ca.SX.sym("RotorSpeed", 4, 1)
+        RotorSpeedDotInput = ca.SX.sym("RotorSpeedDotInput", 4, 1)
         temp_input = self.G @ (RotorSpeed ** 2)
         # print(temp_input[0])
         
@@ -95,7 +97,8 @@ class QuadrotorModel:
             # -g * e3 + (f_thrust - RotationMat @ (self.D @ RotationMat.T @ v - self.kh * vh.T @ vh * e3)) / self.mass,
             v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g,
             1 / 2 * skew_symmetric(BodyRate) @ Orientation,
-            ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:])
+            ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:]),
+            RotorSpeedDotInput
         )
         # print("vdot")
         # print(v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g)
@@ -108,14 +111,14 @@ class QuadrotorModel:
         self.model.name = quad_name
         self.model.x = x
         self.model.xdot = xdot
-        self.model.u = RotorSpeed
+        self.model.u = RotorSpeedDotInput
         # self.model.p = p
         # self.model.z = z
         self.model.f_expl_expr = f_expl
         self.model.f_impl_expr = xdot - f_expl
         self.model.con_h_expr = con_h
         # self.model.params = params
-        self.model.x0 = np.concatenate((np.zeros(6), np.array([1, 0, 0, 0]), np.zeros(3)))
+        self.model.x0 = np.concatenate((np.zeros(6), np.array([1, 0, 0, 0]), np.zeros(3), np.zeros(4)))
         # self.model.x0 = np.concatenate((np.zeros(6), flatten(np.eye(3)), np.zeros(3)),axis=0)
         # Model bounds
 

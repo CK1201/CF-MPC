@@ -1,8 +1,7 @@
 import os, scipy.linalg
 import numpy as np
-import casadi as ca
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
-from src.quad_mpc.quad_model import QuadrotorModel
+from src.quad_mpc.quad_model1 import QuadrotorModel
 
 class QuadrotorOptimizer:
     def __init__(self, Tf, N) -> None:
@@ -53,20 +52,15 @@ class QuadrotorOptimizer:
         self.ocp.dims.nbx_e = nx
         # self.ocp.dims.nh = nh
         # self.ocp.dims.np = np_
+        
 
         # set cost
-        Q = np.diag(np.concatenate((np.ones(3) * 0.5, np.ones(3) * 0.05, np.ones(4) * 0.1, np.ones(3) * 0.01)))
-        # Q[2, 2] = 10
-        R = np.eye(nu) * 1 / model.RotorSpeed_max
+        Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.0, np.ones(4) * 0.00, np.ones(3) * 0.00, np.ones(4) * 0.001)))
+        Q[5, 5] = 0
+        R = np.eye(nu) * 0.00
 
         self.ocp.cost.cost_type = "LINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
         self.ocp.cost.cost_type_e = "LINEAR_LS"
-
-        # self.ocp.cost.cost_type = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
-        # self.ocp.cost.cost_type_e = "NONLINEAR_LS"
-
-        self.ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
-        self.ocp.model.cost_y_expr_e = ca.vertcat(model.x)
 
         # self.ocp.cost.W_0 = scipy.linalg.block_diag(Q, R)
         self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
@@ -99,9 +93,9 @@ class QuadrotorOptimizer:
         # self.ocp.constraints.idxbx_0 = np.array([])
 
         # bodyrate constraint
-        self.ocp.constraints.lbx = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
-        self.ocp.constraints.ubx = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
-        self.ocp.constraints.idxbx = np.array(range(3)) + nx - 3
+        self.ocp.constraints.lbx = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ, model.RotorSpeed_min, model.RotorSpeed_min, model.RotorSpeed_min, model.RotorSpeed_min])
+        self.ocp.constraints.ubx = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ, model.RotorSpeed_max, model.RotorSpeed_max, model.RotorSpeed_max, model.RotorSpeed_max])
+        self.ocp.constraints.idxbx = np.array(range(7)) + nx - 7
 
         # self.ocp.constraints.lbx_e = np.array([])
         # self.ocp.constraints.ubx_e = np.array([])
@@ -111,9 +105,9 @@ class QuadrotorOptimizer:
         # self.ocp.constraints.idxbxe_0 = np.array([])
 
         # input constraints
-        self.ocp.constraints.lbu = np.ones(nu) * model.RotorSpeed_min
-        self.ocp.constraints.ubu = np.ones(nu) * model.RotorSpeed_max
-        self.ocp.constraints.idxbu = np.array(range(nu))
+        # self.ocp.constraints.lbu = np.ones(nu) * -20
+        # self.ocp.constraints.ubu = np.ones(nu) * 20
+        # self.ocp.constraints.idxbu = np.array(range(nu))
 
         # ocp.constraints.lsbx = np.zeros([nsbx])
         # ocp.constraints.usbx = np.zeros([nsbx])
@@ -143,8 +137,8 @@ class QuadrotorOptimizer:
 
         # set QP solver and integration
         self.ocp.solver_options.tf = Tf
-        self.ocp.solver_options.qp_solver = "FULL_CONDENSING_HPIPM" # 'PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP'
-        self.ocp.solver_options.nlp_solver_type = "SQP" # SQP SQP_RTI
+        self.ocp.solver_options.qp_solver = "FULL_CONDENSING_HPIPM" # 'PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'FULL_CONDENSING_HPIPM', 'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP'
+        self.ocp.solver_options.nlp_solver_type = "SQP_RTI" # SQP SQP_RTI
         self.ocp.solver_options.hessian_approx = "GAUSS_NEWTON" # 'GAUSS_NEWTON', 'EXACT'
         self.ocp.solver_options.integrator_type = "ERK"
         self.ocp.solver_options.print_level = 0
@@ -155,7 +149,6 @@ class QuadrotorOptimizer:
         # self.ocp.solver_options.tol = 1e-4
         # self.ocp.solver_options.nlp_solver_tol_comp = 1e-1
         
-
         # create solver
         json_file = os.path.join('./' + model.name + '_acados_ocp.json')
         if os.path.exists(json_file):

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3.6
-import rospy, std_msgs.msg, math
+import rospy, math
 import numpy as np
 from std_msgs.msg import Int16, Bool
 from nav_msgs.msg import Odometry
 from mav_msgs.msg import Actuators
 from quadrotor_msgs.msg import ControlCommand
-from geometry_msgs.msg import PoseStamped, TwistStamped
+from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import Empty
 from src.utils.utils import *
-from src.quad_mpc.quad_optimizer import QuadrotorOptimizer
+from src.quad_mpc.quad_optimizer1 import QuadrotorOptimizer
 
 '''
 RotorS
@@ -37,32 +37,30 @@ RotorS
 '''
 class QuadMPC:
     def __init__(self, t_horizon = 1, N = 10) -> None:
-        rospy.init_node("mpc_node")
+        rospy.init_node("mpc_node1")
         quad_name = rospy.get_param('quad_name', default='hummingbird')
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps
         self.have_odom = False
-        self.traj_type = 2
+        self.have_motor = False
+        self.traj_type = 1
         # load model
         self.quadrotorOptimizer = QuadrotorOptimizer(t_horizon, N)
         # Subscribers
         self.odom_sub = rospy.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry, self.odom_callback)
         self.traj_type_sub = rospy.Subscriber('/' + quad_name + '/traj_type', Int16, self.traj_type_callback)
+        self.motor_speed_sub = rospy.Subscriber('/' + quad_name + '/motor_speed', Actuators, self.motor_speed_callback)
         # Publishers
         self.arm_pub = rospy.Publisher('/' + quad_name + '/bridge/arm', Bool, queue_size=1, tcp_nodelay=True)
-        self.start_autopilot_pub = rospy.Publisher('/' + quad_name + '/autopilot/start', std_msgs.msg.Empty, queue_size=1, tcp_nodelay=True)
-        # self.control_motor_pub = rospy.Publisher('/' + quad_name + '/command/motor_speed', Actuators, queue_size=1, tcp_nodelay=True)
-        self.control_pose_pub = rospy.Publisher('/' + quad_name + '/autopilot/pose_command', PoseStamped, queue_size=1, tcp_nodelay=True)
-        self.control_vel_pub = rospy.Publisher('/' + quad_name + '/autopilot/velocity_command', TwistStamped, queue_size=1, tcp_nodelay=True)
-        # self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
-        self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/autopilot/control_command_input', ControlCommand, queue_size=1, tcp_nodelay=True)
+        self.control_motor_pub = rospy.Publisher('/' + quad_name + '/command/motor_speed', Actuators, queue_size=1, tcp_nodelay=True)
+        # self.control_pose_pub = rospy.Publisher('/' + quad_name + '/command/pose', PoseStamped, queue_size=1, tcp_nodelay=True)
+        self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
         # Trying to unpause Gazebo for 10 seconds.
         rospy.wait_for_service('/gazebo/unpause_physics')
         unpause_gazebo = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
-        # unpause_gazebo = rospy.ServiceProxy('/' + quad_name + '/autopilot/start', Empty)
         unpaused = unpause_gazebo.call()
         self.u_set = np.zeros((self.N, self.quadrotorOptimizer.ocp.model.u.size()[0]))
-        self.x_set = np.zeros((self.N + 1, self.quadrotorOptimizer.ocp.model.x.size()[0]))
+        self.x_set = np.zeros((self.N, self.quadrotorOptimizer.ocp.model.x.size()[0]))
         self.have_uset = False
         self.begin_time = rospy.Time.now().to_sec()
         # p, v, qq, br = self.getReference(2, 0)
@@ -78,69 +76,40 @@ class QuadMPC:
             rospy.signal_shutdown("Could not wake up Gazebo.")
         else:
             rospy.loginfo("Unpaused the Gazebo simulation.")
-
-        i = 0
-        while (i <= 2):
-            i += 1
-            rospy.sleep(1.0)
-
-        arm = Bool()
-        arm.data = True
-        self.arm_pub.publish(arm)
-        self.start_autopilot_pub.publish(std_msgs.msg.Empty())
-
-        i = 0
-        while (i <= 5):
-            i += 1
-            rospy.sleep(1.0)
         
         # Timer
         self.timer = rospy.Timer(rospy.Duration(t_horizon / 2), self.QuadMPCFSM)
 
+        arm = Bool()
+        arm.data = True
+        self.arm_pub.publish(arm)
+
         rate = rospy.Rate(N / t_horizon)
         while not rospy.is_shutdown():
             if self.have_uset:
-                x1 = self.x_set[self.control_num + 1]
-                u1 = self.u_set[self.control_num]
-                p = x1[: 3]
-                v = x1[3: 6]
-                q = x1[6: 10]
-                br = x1[-3:]
-
-                # pose controller
-                cmd = PoseStamped()
-                cmd.header.stamp = rospy.Time.now()
-                cmd.pose.position.x, cmd.pose.position.y, cmd.pose.position.z = p[0], p[1], p[2]
-                # cmd.pose.orientation.w, cmd.pose.orientation.x, cmd.pose.orientation.y, cmd.pose.orientation.z = q[0], q[1], q[2], q[3]
-                # self.control_pose_pub.publish(cmd)
-                # print(p)
-
-                cmd = TwistStamped()
-                cmd.header.stamp = rospy.Time.now()
-                cmd.twist.linear.x, cmd.twist.linear.y, cmd.twist.linear.z = v[0], v[1], v[2]
-                # cmd.twist.angular.x, cmd.twist.angular.y, cmd.twist.angular.z = br[0], br[1], br[2]
-                self.control_vel_pub.publish(cmd)
-                print(v)
+                x1 = self.x_set[self.control_num, :-4]
+                u1 = self.x_set[self.control_num, -4:]
 
                 # motor speed
                 cmd = Actuators()
-                cmd.header.stamp = rospy.Time.now()
                 cmd.angular_velocities = u1
                 # self.control_motor_pub.publish(cmd)
 
-                #  controller
+                # controller
+                q = x1[6: 10]
+                br = x1[-3:]
                 cmd = ControlCommand()
                 cmd.header.stamp = rospy.Time.now()
                 cmd.expected_execution_time = rospy.Time.now()
-                cmd.control_mode = 1 # NONE=0 ATTITUDE=1 BODY_RATES=2 ANGULAR_ACCELERATIONS=3 ROTOR_THRUSTS=4
+                cmd.control_mode = 4 # NONE=0 ATTITUDE=1 BODY_RATES=2 ANGULAR_ACCELERATIONS=3 ROTOR_THRUSTS=4
                 cmd.armed = True
                 cmd.orientation.w, cmd.orientation.x, cmd.orientation.y, cmd.orientation.z = q[0], q[1], q[2], q[3]
                 cmd.bodyrates.x, cmd.bodyrates.y, cmd.bodyrates.z = br[0], br[1], br[2]
                 cmd.collective_thrust = np.sum(u1 ** 2 * self.quadrotorOptimizer.quadrotorModel.kT) / self.quadrotorOptimizer.quadrotorModel.mass
                 cmd.rotor_thrusts = u1 ** 2 * self.quadrotorOptimizer.quadrotorModel.kT
-                # self.control_cmd_pub.publish(cmd)
-                # print("pose: [{:.2f}, {:.2f}, {:.2f}]".format(self.p[0], self.p[1], self.p[2]))
-                # print("rotor:[{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u1[0], u1[1], u1[2], u1[3]))
+                self.control_cmd_pub.publish(cmd)
+                print("pose: [{:.2f}, {:.2f}, {:.2f}]".format(self.p[0], self.p[1], self.p[2]))
+                print("rotor:[{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u1[0], u1[1], u1[2], u1[3]))
                 print()
                 self.control_num += 1
                 if self.control_num == self.N:
@@ -150,6 +119,9 @@ class QuadMPC:
     def odom_callback(self, msg):
         if not(self.have_odom):
             self.have_odom = True
+            arm = Bool()
+            arm.data = True
+            self.arm_pub.publish(arm)
         self.p = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
         self.q = [msg.pose.pose.orientation.w, msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
             msg.pose.pose.orientation.z]
@@ -161,26 +133,29 @@ class QuadMPC:
     def traj_type_callback(self, msg):
         self.traj_type = msg.data
         self.begin_time = rospy.Time.now().to_sec()
+        return
+
+    def motor_speed_callback(self, msg):
+        self.have_motor = True
+        self.u = np.array(msg.angular_velocities)
+        return
 
     def QuadMPCFSM(self, event):
-        if not(self.have_odom) or not(self.traj_type):# or not(self.traj_type)
+        if not(self.have_odom) or not(self.traj_type) or not(self.have_motor):# 
             return
 
-        self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
-        self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
+        x0 = np.concatenate((self.x0, self.u))
+        self.quadrotorOptimizer.acados_solver.set(0, "lbx", x0)
+        self.quadrotorOptimizer.acados_solver.set(0, "ubx", x0)
 
-        # self.traj_ref = self.getReference(self.traj_type, rospy.Time.now().to_sec() - self.begin_time)
         p, v, q, br, u = self.getReference(self.traj_type, rospy.Time.now().to_sec() - self.begin_time)
-        # print(q)
-        # print(u)
-        
         for i in range(self.N):
-            yref = np.concatenate((p[i], v[i], q[i], br[i]))
+            yref = np.concatenate((p[i], v[i], q[i], br[i], u[i]))
             if i != self.N - 1:
-                yref = np.concatenate((yref, u[i]))
+                yref = np.concatenate((yref, np.zeros(4)))
             
             self.quadrotorOptimizer.acados_solver.set(i + 1, 'yref', yref)
-            self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
+            self.quadrotorOptimizer.acados_solver.set(i, 'u', np.zeros(4))
 
         time = rospy.Time.now().to_sec()
         status = self.quadrotorOptimizer.acados_solver.solve()
@@ -189,15 +164,15 @@ class QuadMPC:
         
         # if status != 0:
         #     print("acados returned status {}".format(status))
-        self.x_set[0] = self.quadrotorOptimizer.acados_solver.get(0, "x")
+
         for i in range(self.N):
             self.u_set[i] = self.quadrotorOptimizer.acados_solver.get(i, "u")
-            self.x_set[i + 1] = self.quadrotorOptimizer.acados_solver.get(i + 1, "x")
+            self.x_set[i] = self.quadrotorOptimizer.acados_solver.get(i + 1, "x")
         self.have_uset = True
         self.control_num = 0
 
-        # print(self.u_set)
-        # print(self.x_set)
+        print(self.u_set)
+        print(self.x_set)
 
         # x1 = self.x_set[0]
         # x2 = self.x_set[1]
@@ -218,10 +193,7 @@ class QuadMPC:
         yawdot = np.zeros((self.N, 1))
         yawdotdot = np.zeros((self.N, 1))
         dt = self.t_horizon / self.N
-        delta_t = np.arange(dt, dt * (self.N + 1), dt)
-        # t = np.arange(time + dt, time + dt * (self.N + 1), dt)
-        t = time + delta_t
-        # print(t)
+        t = np.arange(time + dt, time + dt * self.N + dt, dt)
         if traj_type == 1:
             q = np.zeros((self.N, 4))
             q[:, 0] = 1
