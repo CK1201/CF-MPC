@@ -135,14 +135,14 @@
       </group>
     </group>
 
-    <!-- <node pkg="joy" type="joy_node" name="joy_node">
+    <node pkg="joy" type="joy_node" name="joy_node">
       <param name="autorepeat_rate" value="10"/>
     </node>
 
     <node pkg="manual_flight_assistant" type="manual_flight_assistant" 
         name="manual_flight_assistant" output="screen">
       <rosparam file="$(find rpg_rotors_interface)/parameters/manual_flight_assistant.yaml"/>
-    </node> -->
+    </node>
 
   </group> 
 

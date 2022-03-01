@@ -55,7 +55,8 @@ class QuadrotorOptimizer:
         # self.ocp.dims.np = np_
 
         # set cost
-        Q = np.diag(np.concatenate((np.ones(3) * 0.5, np.ones(3) * 0.05, np.ones(4) * 0.1, np.ones(3) * 0.01)))
+        Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.05, np.ones(4) * 0.1, np.ones(3) * 0.01)))
+        # Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.00, np.ones(4) * 0.0, np.ones(3) * 0.00)))
         # Q[2, 2] = 10
         R = np.eye(nu) * 1 / model.RotorSpeed_max
 
@@ -99,9 +100,9 @@ class QuadrotorOptimizer:
         # self.ocp.constraints.idxbx_0 = np.array([])
 
         # bodyrate constraint
-        self.ocp.constraints.lbx = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
-        self.ocp.constraints.ubx = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
-        self.ocp.constraints.idxbx = np.array(range(3)) + nx - 3
+        # self.ocp.constraints.lbx = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
+        # self.ocp.constraints.ubx = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
+        # self.ocp.constraints.idxbx = np.array(range(3)) + nx - 3
 
         # self.ocp.constraints.lbx_e = np.array([])
         # self.ocp.constraints.ubx_e = np.array([])
@@ -113,6 +114,7 @@ class QuadrotorOptimizer:
         # input constraints
         self.ocp.constraints.lbu = np.ones(nu) * model.RotorSpeed_min
         self.ocp.constraints.ubu = np.ones(nu) * model.RotorSpeed_max
+        # self.ocp.constraints.ubu = np.ones(nu) * model.input_max
         self.ocp.constraints.idxbu = np.array(range(nu))
 
         # ocp.constraints.lsbx = np.zeros([nsbx])

@@ -32,12 +32,15 @@ class QuadrotorModel:
             [float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['iyy']), float(attrib['body_inertia'][0]['iyz'])],
             [float(attrib['body_inertia'][0]['ixz']), float(attrib['body_inertia'][0]['iyz']), float(attrib['body_inertia'][0]['izz'])]
         ])
+        
         # print(self.Inertia)
 
         # rotor
         RotorSpeed_min = 0
         RotorSpeed_max = float(attrib["max_rot_velocity"]) # rad/s
         RotorDrag_coefficient = float(attrib["rotor_drag_coefficient"])
+
+        self.thrust_max = self.kT * (RotorSpeed_max ** 2)
 
         if self.configuration == 'x':
             arm_length_act = self.arm_length * np.cos(np.pi/4)
@@ -128,6 +131,9 @@ class QuadrotorModel:
         # input bounds
         self.model.RotorSpeed_min = RotorSpeed_min
         self.model.RotorSpeed_max = RotorSpeed_max
+
+        self.model.input_min = 0
+        self.model.input_max = 1
 
         # define constraints struct
         # self.constraint.expr = ca.vertcat([])

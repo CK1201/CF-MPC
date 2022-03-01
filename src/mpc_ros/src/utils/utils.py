@@ -45,6 +45,14 @@ def v_dot_q(v, q):
 
     return ca.mtimes(rot_mat, v)
 
+def quaternion_inverse(q):
+    w, x, y, z = q[0], q[1], q[2], q[3]
+
+    if isinstance(q, np.ndarray):
+        return np.array([w, -x, -y, -z])
+    else:
+        return ca.vertcat(w, -x, -y, -z)
+
 def quat_to_rotation_matrix(quaternions):
     q0, q1, q2, q3 = quaternions[0], quaternions[1], quaternions[2], quaternions[3]
     if isinstance(quaternions, np.ndarray):
