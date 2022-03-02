@@ -132,9 +132,6 @@ class QuadrotorModel:
         self.model.RotorSpeed_min = RotorSpeed_min
         self.model.RotorSpeed_max = RotorSpeed_max
 
-        self.model.input_min = 0
-        self.model.input_max = 1
-
         # define constraints struct
         # self.constraint.expr = ca.vertcat([])
     

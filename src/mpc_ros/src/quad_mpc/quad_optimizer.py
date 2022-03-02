@@ -57,7 +57,6 @@ class QuadrotorOptimizer:
         # set cost
         Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.05, np.ones(4) * 0.1, np.ones(3) * 0.01)))
         # Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.00, np.ones(4) * 0.0, np.ones(3) * 0.00)))
-        # Q[2, 2] = 10
         R = np.eye(nu) * 1 / model.RotorSpeed_max
 
         self.ocp.cost.cost_type = "LINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
@@ -114,7 +113,6 @@ class QuadrotorOptimizer:
         # input constraints
         self.ocp.constraints.lbu = np.ones(nu) * model.RotorSpeed_min
         self.ocp.constraints.ubu = np.ones(nu) * model.RotorSpeed_max
-        # self.ocp.constraints.ubu = np.ones(nu) * model.input_max
         self.ocp.constraints.idxbu = np.array(range(nu))
 
         # ocp.constraints.lsbx = np.zeros([nsbx])

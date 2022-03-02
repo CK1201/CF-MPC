@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.6
 import rospy, std_msgs.msg, math
 import numpy as np
+import matplotlib.pyplot as plt
 from std_msgs.msg import Int16, Bool
 from nav_msgs.msg import Odometry
 from mav_msgs.msg import Actuators
@@ -43,7 +44,7 @@ class QuadMPC:
         self.N = N # number of discretization steps
         self.have_odom = False
         self.have_ap_fb = False
-        self.traj_type = 1
+        self.traj_type = 3
         # load model
         self.quadrotorOptimizer = QuadrotorOptimizer(t_horizon, N)
         # Subscribers
@@ -67,9 +68,7 @@ class QuadMPC:
         self.x_set = np.zeros((self.N + 1, self.quadrotorOptimizer.ocp.model.x.size()[0]))
         self.have_uset = False
         self.begin_time = rospy.Time.now().to_sec()
-        # p, v, qq, br = self.getReference(2, 0)
-        # print(qq)
-
+        
         i = 0
         while (i <= 10 and not(unpaused)):
             i += 1
@@ -94,81 +93,55 @@ class QuadMPC:
             rospy.sleep(0.5)
         if(self.ap_state == AutopilotFeedback().OFF):
             self.start_autopilot_pub.publish(std_msgs.msg.Empty())
-
-        # i = 0
-        # while (i < 5):
-        #     print(5 - i - 1)
-        #     i += 1
-        #     rospy.sleep(1.0)
+            i = 0
+            while (i < 6):
+                print(6 - i - 1)
+                i += 1
+                rospy.sleep(1.0)
 
         # get to initial point
-        initial_point = np.array([1, 0, 2])
+        initial_point = np.array([0, 0, 3])
         cmd = PoseStamped()
         cmd.header.stamp = rospy.Time.now()
         cmd.pose.position.x, cmd.pose.position.y, cmd.pose.position.z = initial_point[0], initial_point[1], initial_point[2]
-        # self.control_pose_pub.publish(cmd)
+        self.control_pose_pub.publish(cmd)
 
-        # while(np.linalg.norm(np.array(self.p) - initial_point) > 0.05):
-        #     rospy.sleep(0.5)
+        while(np.linalg.norm(np.array(self.p) - initial_point) > 0.05):
+            rospy.sleep(0.5)
         
         # Timer
-        # self.timer = rospy.Timer(rospy.Duration(t_horizon / 1), self.QuadMPCFSM)
-        self.timer = rospy.Timer(rospy.Duration(1 / 10), self.QuadMPCFSM)
+        self.timer = rospy.Timer(rospy.Duration(1 / 50), self.QuadMPCFSM)
+
+        
+
+        # while not self.have_odom:
+        #     rospy.sleep(0.5)
+        # p, v, q, br, u = self.getReference(3, 0, self.t_horizon, self.N, True)
+        # t = np.linspace(0, self.t_horizon, self.N + 1)
+        # fig=plt.figure(num=1,figsize=(8,8))
+        # ax1=fig.add_subplot(331)
+        # ax1.plot(t,br[:,0])
+        # ax2=fig.add_subplot(332)
+        # ax2.plot(t,br[:,1])
+        # ax3=fig.add_subplot(333)
+        # ax3.plot(t,br[:,2])
+        # ax4=fig.add_subplot(334)
+        # ax4.plot(t,u[:, 0])
+        # ax5=fig.add_subplot(335)
+        # ax5.plot(t,u[:, 1])
+        # ax6=fig.add_subplot(336)
+        # ax6.plot(t,u[:, 2])
+        # ax7=fig.add_subplot(337)
+        # ax7.plot(t,u[:, 3])
+        # ax8=fig.add_subplot(338)
+        # ax8.plot(p[:, 0],p[:, 1])
+        # ax9=fig.add_subplot(339)
+        # ax9.plot(t,v[:, 0])
+        # plt.show()
+        # rospy.signal_shutdown("test.")
 
         rate = rospy.Rate(N / t_horizon)
         while not rospy.is_shutdown():
-            # if self.have_uset:
-            #     x1 = self.x_set[self.control_num + 1]
-            #     u1 = self.u_set[self.control_num]
-            #     p = x1[: 3]
-            #     v =  x1[3: 6]
-            #     q = x1[6: 10]
-            #     br = x1[-3:]
-            #     angle = rotation_matrix_to_euler(quat_to_rotation_matrix(q))
-                
-
-            #     # pose controller
-            #     cmd = PoseStamped()
-            #     cmd.header.stamp = rospy.Time.now()
-            #     cmd.pose.position.x, cmd.pose.position.y, cmd.pose.position.z = p[0], p[1], p[2]
-            #     cmd.pose.orientation.w, cmd.pose.orientation.x, cmd.pose.orientation.y, cmd.pose.orientation.z = q[0], q[1], q[2], q[3]
-            #     # self.control_pose_pub.publish(cmd)
-
-            #     # vel controller
-            #     cmd = TwistStamped()
-            #     cmd.header.stamp = rospy.Time.now()
-            #     cmd.twist.linear.x, cmd.twist.linear.y, cmd.twist.linear.z = v[0], v[1], v[2]
-            #     cmd.twist.angular.x, cmd.twist.angular.y, cmd.twist.angular.z = br[0], br[1], br[2]
-            #     # self.control_vel_pub.publish(cmd)
-
-            #     # motor speed
-            #     cmd = Actuators()
-            #     cmd.header.stamp = rospy.Time.now()
-            #     cmd.angular_velocities = u1
-            #     # self.control_motor_pub.publish(cmd)
-
-            #     #  controller
-            #     cmd = ControlCommand()
-            #     cmd.header.stamp = rospy.Time.now()
-            #     cmd.expected_execution_time = rospy.Time.now()
-            #     cmd.control_mode = 4 # NONE=0 ATTITUDE=1 BODY_RATES=2 ANGULAR_ACCELERATIONS=3 ROTOR_THRUSTS=4
-            #     cmd.armed = True
-            #     cmd.orientation.w, cmd.orientation.x, cmd.orientation.y, cmd.orientation.z = q[0], q[1], q[2], q[3]
-            #     cmd.bodyrates.x, cmd.bodyrates.y, cmd.bodyrates.z = br[0], br[1], br[2]
-            #     cmd.collective_thrust = np.sum(u1 ** 2 * self.quadrotorOptimizer.quadrotorModel.kT) / self.quadrotorOptimizer.quadrotorModel.mass
-            #     cmd.rotor_thrusts = u1 ** 2 * self.quadrotorOptimizer.quadrotorModel.kT
-            #     # self.ap_control_cmd_pub.publish(cmd)
-            #     print("pose:        [{:.2f}, {:.2f}, {:.2f}]".format(self.p[0], self.p[1], self.p[2]))
-            #     print("vel:         [{:.2f}, {:.2f}, {:.2f}]".format(self.v[0], self.v[1], self.v[2]))
-            #     print("desir pose:  [{:.2f}, {:.2f}, {:.2f}]".format(p[0], p[1], p[2]))
-            #     print("desir vel :  [{:.2f}, {:.2f}, {:.2f}]".format(v[0], v[1], v[2]))
-            #     print("desir angle: [{:.2f}, {:.2f}, {:.2f}]".format(angle[0], angle[1], angle[2]))
-            #     print("desir br:    [{:.2f}, {:.2f}, {:.2f}]".format(br[0], br[1], br[2]))
-            #     print("rotor:[{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u1[0], u1[1], u1[2], u1[3]))
-            #     print()
-            #     self.control_num += 1
-            #     if self.control_num == self.N:
-            #         self.have_uset = False
             rate.sleep()
 
     def odom_callback(self, msg):
@@ -197,22 +170,20 @@ class QuadMPC:
         self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
 
         # self.traj_ref = self.getReference(self.traj_type, rospy.Time.now().to_sec() - self.begin_time)
-        p, v, q, br, u = self.getReference(self.traj_type, rospy.Time.now().to_sec() - self.begin_time)
+        p, v, q, br, u = self.getReference(self.traj_type, rospy.Time.now().to_sec() - self.begin_time, self.t_horizon, self.N, False)
         # print(q)
         # print(u)
         
         for i in range(self.N):
             yref = np.concatenate((p[i], v[i], q[i], br[i], u[i]))
-            # if i != self.N - 1:
-            #     yref = np.concatenate((yref, u[i]))
-            
             self.quadrotorOptimizer.acados_solver.set(i, 'yref', yref)
-        yref = np.concatenate((p[i], v[i], q[i], br[i]))
+            self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
+        yref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N]))
         self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', yref)
-            # self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
+        
 
         time = rospy.Time.now().to_sec()
-        status = self.quadrotorOptimizer.acados_solver.solve()
+        self.quadrotorOptimizer.acados_solver.solve()
         self.lastMPCTime = rospy.Time.now().to_sec()
         print('runtime: ', self.lastMPCTime - time)
         
@@ -228,7 +199,7 @@ class QuadMPC:
         x1 = self.x_set[self.control_num + 1]
         u1 = self.u_set[self.control_num]
         p = x1[: 3]
-        v =  x1[3: 6]
+        v = x1[3: 6]
         q = x1[6: 10]
         br = x1[-3:]
         angle = rotation_matrix_to_euler(quat_to_rotation_matrix(q))
@@ -236,7 +207,7 @@ class QuadMPC:
         cmd = ControlCommand()
         cmd.header.stamp = rospy.Time.now()
         cmd.expected_execution_time = rospy.Time.now()
-        cmd.control_mode = 4 # NONE=0 ATTITUDE=1 BODY_RATES=2 ANGULAR_ACCELERATIONS=3 ROTOR_THRUSTS=4
+        cmd.control_mode = 2 # NONE=0 ATTITUDE=1 BODY_RATES=2 ANGULAR_ACCELERATIONS=3 ROTOR_THRUSTS=4
         cmd.armed = True
         cmd.orientation.w, cmd.orientation.x, cmd.orientation.y, cmd.orientation.z = q[0], q[1], q[2], q[3]
         cmd.bodyrates.x, cmd.bodyrates.y, cmd.bodyrates.z = br[0], br[1], br[2]
@@ -250,7 +221,9 @@ class QuadMPC:
         print("desir vel :  [{:.2f}, {:.2f}, {:.2f}]".format(v[0], v[1], v[2]))
         print("desir angle: [{:.2f}, {:.2f}, {:.2f}]".format(angle[0], angle[1], angle[2]))
         print("desir br:    [{:.2f}, {:.2f}, {:.2f}]".format(br[0], br[1], br[2]))
-        print("rotor:[{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u1[0], u1[1], u1[2], u1[3]))
+        print("ref rotor:   [{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u[0, 0], u[0, 1], u[0, 2], u[0, 3]))
+        print("rotor:       [{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u1[0], u1[1], u1[2], u1[3]))
+        print("rotor error: [{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u[0, 0] - u1[0], u[0, 1] - u1[1], u[0, 2] - u1[2], u[0, 3] - u1[3]))
         print("*****************")
 
         # print(self.u_set)
@@ -265,34 +238,32 @@ class QuadMPC:
         # print(x2_)
         return
 
-    def getReference(self, traj_type, time):
-        p = np.zeros((self.N, 3))
-        v = np.zeros((self.N, 3))
-        a = np.zeros((self.N, 3))
-        j = np.zeros((self.N, 3))
-        s = np.zeros((self.N, 3))
-        yaw = np.zeros((self.N, 1))
-        yawdot = np.zeros((self.N, 1))
-        yawdotdot = np.zeros((self.N, 1))
-        dt = self.t_horizon / self.N
-        delta_t = np.arange(dt, dt * (self.N + 1), dt)
-        # t = np.arange(time + dt, time + dt * (self.N + 1), dt)
-        t = time + delta_t
+    def getReference(self, traj_type, time_now, t_horizon, N_node, plot):
+        p = np.zeros((N_node + 1, 3))
+        v = np.zeros((N_node + 1, 3))
+        a = np.zeros((N_node + 1, 3))
+        j = np.zeros((N_node + 1, 3))
+        s = np.zeros((N_node + 1, 3))
+        yaw = np.zeros((N_node + 1, 1))
+        yawdot = np.zeros((N_node + 1, 1))
+        yawdotdot = np.zeros((N_node + 1, 1))
+        delta_t = np.linspace(0, t_horizon, N_node + 1)
+        t = time_now + delta_t
         # print(t)
         if traj_type == 1:
-            p[:, 2] = 1
-            q = np.zeros((self.N, 4))
-            q[:, 0] = 1
-            br = np.zeros((self.N, 3))
-            u = math.sqrt(self.quadrotorOptimizer.quadrotorModel.g[-1] * self.quadrotorOptimizer.quadrotorModel.mass / self.quadrotorOptimizer.quadrotorModel.kT / 4)
-            u = np.ones((self.N, 4)) * u
+            p[:, 0] = 1
+            p[:, 1] = 2
+            p[:, 2] = 3
+            # u = math.sqrt(self.quadrotorOptimizer.quadrotorModel.g[-1] * self.quadrotorOptimizer.quadrotorModel.mass / self.quadrotorOptimizer.quadrotorModel.kT / 4)
+            # u = np.ones((self.N, 4)) * u
+
         elif traj_type == 2:
-            r = 2
-            w = 0.1 # rad/s
+            r = 5
+            w = 0.5 # rad/s
             phi = 0
             p[:, 0] = r * np.cos(w * t + phi) - r
             p[:, 1] = r * np.sin(w * t + phi)
-            p[:, 2] = 1
+            p[:, 2] = 3
             v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
             v[:, 1] = w ** 1 * r * np.cos(w * t + phi)
             v[:, 2] = 0
@@ -306,15 +277,58 @@ class QuadMPC:
             s[:, 1] = w ** 4 * r * np.sin(w * t + phi)
             s[:, 2] = 0
 
-            q, br, u = self.getReferenceAll(v=v, a=a, j=j, s=s, yaw=yaw, yawdot=yawdot, yawdotdot=yawdotdot)
+        elif traj_type == 3:
+            r = 5
+            w_rate = 0.03
+            w = t * w_rate # rad/s
+            phi = 0
+            p[:, 0] = r * np.cos(w * t + phi) - r
+            p[:, 1] = r * np.sin(w * t + phi)
+            p[:, 2] = 3
+            v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
+            v[:, 1] = w ** 1 * r * np.cos(w * t + phi)
+            v[:, 2] = 0
+            a[:, 0] = - w ** 2 * r * np.cos(w * t + phi)
+            a[:, 1] = - w ** 2 * r * np.sin(w * t + phi)
+            a[:, 2] = 0
+            j[:, 0] = w ** 3 * r * np.sin(w * t + phi)
+            j[:, 1] = - w ** 3 * r * np.cos(w * t + phi)
+            j[:, 2] = 0
+            s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
+            s[:, 1] = w ** 4 * r * np.sin(w * t + phi)
+            s[:, 2] = 0
+
+        q, br, u = self.getReference_Quaternion_Bodyrates_RotorSpeed(v=v, a=a, j=j, s=s, yaw=yaw, yawdot=yawdot, yawdotdot=yawdotdot)
+
+        if plot:
+            fig=plt.figure(num=1,figsize=(8,8))
+            ax1=fig.add_subplot(331)
+            ax1.plot(t,br[:,0])
+            ax2=fig.add_subplot(332)
+            ax2.plot(t,br[:,1])
+            ax3=fig.add_subplot(333)
+            ax3.plot(t,br[:,2])
+            ax4=fig.add_subplot(334)
+            ax4.plot(t,u[:, 0])
+            ax5=fig.add_subplot(335)
+            ax5.plot(t,u[:, 1])
+            ax6=fig.add_subplot(336)
+            ax6.plot(t,u[:, 2])
+            ax7=fig.add_subplot(337)
+            ax7.plot(t,u[:, 3])
+            ax8=fig.add_subplot(338)
+            ax8.plot(p[:, 0],p[:, 1])
+            plt.show()
+
         return p, v, q, br, u
     
-    def getReferenceAll(self, v, a, j, s, yaw, yawdot, yawdotdot):
-        q = np.zeros((self.N, 4))
-        br = np.zeros((self.N, 3))
-        brdot = np.zeros((self.N, 3))
-        u = np.zeros((self.N, 4))
-        thrust = np.zeros((self.N,))
+    def getReference_Quaternion_Bodyrates_RotorSpeed(self, v, a, j, s, yaw, yawdot, yawdotdot):
+        N_reference = len(v)
+        q = np.zeros((N_reference, 4))
+        br = np.zeros((N_reference, 3))
+        brdot = np.zeros((N_reference, 3))
+        u = np.zeros((N_reference, 4))
+        thrust = np.zeros((N_reference,))
         m = self.quadrotorOptimizer.quadrotorModel.mass
         g = np.array([0, 0, 9.81])
         Ginv = np.linalg.inv(self.quadrotorOptimizer.quadrotorModel.G)
@@ -322,7 +336,7 @@ class QuadMPC:
         d = self.quadrotorOptimizer.quadrotorModel.D
         dx, dy, dz = d[0, 0], d[1, 1], d[2, 2]
         kh = self.quadrotorOptimizer.quadrotorModel.kh
-        for i in range(self.N):
+        for i in range(N_reference):
             # Quaternions
             xc = np.array([math.cos(yaw[i]), math.sin(yaw[i]), 0])
             yc = np.array([-math.sin(yaw[i]), math.cos(yaw[i]), 0])
@@ -364,6 +378,7 @@ class QuadMPC:
 
             # u
             tao = np.dot(Inertia, brdot[i].T) + np.dot(v1_cross_v2(br[i], Inertia), br[i].T)
+            # print(np.dot(Ginv, np.array([thrust[i], tao[0], tao[1], tao[2]]).T))
             u[i] = np.sqrt(np.dot(Ginv, np.array([thrust[i], tao[0], tao[1], tao[2]]).T))
 
         return q, br, u
