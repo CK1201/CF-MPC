@@ -54,7 +54,6 @@ class QuadrotorModel:
                           [-self.arm_length, 0 , self.arm_length, 0],
                           [-1, 1, -1, 1]])
         self.G = ca.mtimes(np.diag([self.kT, self.kT, self.kT, self.kT * self.kM]), self.G)
-        # print(self.G)
 
         # x
         p = ca.SX.sym("P", 3, 1)
@@ -100,10 +99,6 @@ class QuadrotorModel:
             1 / 2 * skew_symmetric(BodyRate) @ Orientation,
             ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:])
         )
-        # print("vdot")
-        # print(v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g)
-        # print("wdot")
-        # print(ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:]))
         
         # con_h
         con_h = None

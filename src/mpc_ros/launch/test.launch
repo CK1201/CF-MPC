@@ -1,9 +1,22 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <include file="$(find mpc_ros)/launch/quadrotor_empty_world.launch">
-    </include>
+    <arg name="expriment" default="hover"/>
+    <arg name="hover_x" default="0"/>
+    <arg name="hover_y" default="0"/>
+    <arg name="hover_z" default="10"/>
+
+    <!-- circle
+    circle_speedup
+    hover -->
+
+    <!-- <include file="$(find mpc_ros)/launch/quadrotor_empty_world.launch">
+    </include> -->
 
     <node pkg="mpc_ros" type="mpc_node.py" name="mpc_node" output="screen">
         <param name="quad_name" value="$(arg mav_name)"/>
+        <param name="expriment" value="$(arg expriment)"/>
+        <param name="hover_x" value="$(arg hover_x)"/>
+        <param name="hover_y" value="$(arg hover_y)"/>
+        <param name="hover_z" value="$(arg hover_z)"/>
     </node>
 </launch>
