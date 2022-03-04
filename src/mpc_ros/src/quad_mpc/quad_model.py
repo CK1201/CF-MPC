@@ -121,7 +121,7 @@ class QuadrotorModel:
         # state bounds
         self.model.BodyratesX = 2 * np.pi
         self.model.BodyratesY = 2 * np.pi
-        self.model.BodyratesZ = np.pi / 4
+        self.model.BodyratesZ = np.pi / 4 * 8
 
         # input bounds
         self.model.RotorSpeed_min = RotorSpeed_min

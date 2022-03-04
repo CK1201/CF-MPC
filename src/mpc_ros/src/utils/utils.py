@@ -116,6 +116,7 @@ def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdot
     brdot = np.zeros((N_reference, 3))
     u = np.zeros((N_reference, 4))
     thrust = np.zeros((N_reference,))
+    thrustdot = np.zeros((N_reference,))
     m = model.mass
     g = np.array([0, 0, 9.81])
     Ginv = np.linalg.inv(model.G)
@@ -141,7 +142,6 @@ def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdot
         drag = kh * (np.dot(xb, v[i].T) ** 2 + np.dot(yb, v[i].T) ** 2)
         thrust[i] = np.dot(zb, m * a[i].T + m * g.T + dz * v[i].T) - drag
         
-
         # Bodyrates
         A_br = np.zeros((3, 3))
         b_br = np.zeros((3,))
@@ -156,11 +156,12 @@ def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdot
         b_br[2] = yawdot[i] * np.dot(xc, xb.T)
         br[i] = np.linalg.solve(A_br, b_br)
         brx, bry, brz = br[i, 0], br[i, 1], br[i, 2]
+        thrustdot[i] = m * np.dot(zb, j[i].T) + dz * np.dot(zb, a[i].T) + brx * np.dot(yb, v[i].T) * (dy + dz - 2 * kh * np.dot(zb, v[i].T)) - bry * np.dot(xb, v[i].T) * (dx + dz - 2 * kh * np.dot(zb, v[i].T))
 
         # Bodyratesdot
         b_brdot = np.zeros((3,))
-        b_brdot[0] = m * np.dot(xb, s[i].T) + m * np.dot(brz * yb - bry * zb, j[i].T) + dx * (brz * np.dot(yb, a[i].T) - bry * np.dot(zb, a[i].T) + np.dot(xb, j[i].T)) - brz * (dx - dy) #+ bry * (thrustdot[i])
-        b_brdot[1] = -m * np.dot(yb, s[i].T) - m * np.dot(-brz * xb + brx * zb, j[i].T) - dy * (-brz * np.dot(xb, a[i].T) + brx * np.dot(zb, a[i].T) + np.dot(yb, j[i].T)) - brz * (dx - dy) #- brx * (thrustdot[i])
+        b_brdot[0] = m * np.dot(xb, s[i].T) + m * np.dot(brz * yb - bry * zb, j[i].T) + dx * (brz * np.dot(yb, a[i].T) - bry * np.dot(zb, a[i].T) + np.dot(xb, j[i].T)) - brz * (dx - dy) + bry * (thrustdot[i])
+        b_brdot[1] = -m * np.dot(yb, s[i].T) - m * np.dot(-brz * xb + brx * zb, j[i].T) - dy * (-brz * np.dot(xb, a[i].T) + brx * np.dot(zb, a[i].T) + np.dot(yb, j[i].T)) - brz * (dx - dy) - brx * (thrustdot[i])
         b_brdot[2] = yawdotdot[i] * np.dot(xc, xb.T) + (yawdot[i] ** 2 + bry ** 2) * np.dot(yc, xb.T) - 2 * yawdot[i] * bry * np.dot(xc, zb.T) - brx * bry * np.dot(yc, yb.T) + yawdot[i] * brz * np.dot(xc, yb.T)
         brdot[i] = np.linalg.solve(A_br, b_brdot)
 

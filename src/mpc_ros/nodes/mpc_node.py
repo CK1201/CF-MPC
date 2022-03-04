@@ -41,7 +41,7 @@ class QuadMPC:
         quad_name = rospy.get_param('~quad_name', default='hummingbird')
         self.expriment = rospy.get_param('~expriment', default='hover')
         self.start_point = np.zeros(3)
-        self.start_point[0] = rospy.get_param('~hover_x', default='0')
+        self.start_point[0] = rospy.get_param('~hover_x', default='2')
         self.start_point[1] = rospy.get_param('~hover_y', default='0')
         self.start_point[2] = rospy.get_param('~hover_z', default='5')
         self.t_horizon = t_horizon # prediction horizon
@@ -61,6 +61,7 @@ class QuadMPC:
         self.start_autopilot_pub = rospy.Publisher('/' + quad_name + '/autopilot/start', std_msgs.msg.Empty, queue_size=1, tcp_nodelay=True)
         # self.control_motor_pub = rospy.Publisher('/' + quad_name + '/command/motor_speed', Actuators, queue_size=1, tcp_nodelay=True)
         self.desire_pub = rospy.Publisher('/' + quad_name + '/desire', Odometry, queue_size=1, tcp_nodelay=True)
+        self.desire_motor_pub = rospy.Publisher('/' + quad_name + '/desire_motor', Actuators, queue_size=1, tcp_nodelay=True)
         # self.control_vel_pub = rospy.Publisher('/' + quad_name + '/autopilot/velocity_command', TwistStamped, queue_size=1, tcp_nodelay=True)
         # self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.ap_control_cmd_pub = rospy.Publisher('/' + quad_name + '/autopilot/control_command_input', ControlCommand, queue_size=1, tcp_nodelay=True)
@@ -78,7 +79,8 @@ class QuadMPC:
         self.pose_error_num = 0
 
         if plot:
-            self.getReference(experiment=self.expriment, start_point=self.start_point, time_now=0, t_horizon=70, N_node=500, model=self.quadrotorOptimizer.quadrotorModel, plot=True)
+            self.getReference(experiment=self.expriment, start_point=self.start_point, time_now=0, t_horizon=20, N_node=500, model=self.quadrotorOptimizer.quadrotorModel, plot=True)
+            return
 
         i = 0
         while (i <= 10 and not(unpaused)):
@@ -100,8 +102,8 @@ class QuadMPC:
         arm.data = True
         self.arm_pub.publish(arm)
 
-        while not self.have_ap_fb:
-            rospy.sleep(0.5)
+        # while not self.have_ap_fb:
+        #     rospy.sleep(0.5)
         if(self.ap_state == AutopilotFeedback().OFF):
             self.start_autopilot_pub.publish(std_msgs.msg.Empty())
             i = 0
@@ -154,6 +156,10 @@ class QuadMPC:
         if not self.reach_start_point:
             # get to initial point
             p, v, q, br, u = self.getReference(experiment='hover', start_point=self.start_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, model=self.quadrotorOptimizer.quadrotorModel, plot=False)
+            error_pose = np.linalg.norm(np.array(self.p) - p[0])
+            error_vel  = np.linalg.norm(np.array(self.v) - v[0])
+            error_q    = np.linalg.norm(np.array(self.q) - q[0])
+            error_br   = np.linalg.norm(np.array(self.w) - br[0])
             if (np.linalg.norm(np.array(self.p) - self.start_point) < 0.05):
                 if not self.reach_last:
                     self.reach_last = True
@@ -162,13 +168,16 @@ class QuadMPC:
                     self.begin_time = rospy.Time.now().to_sec()
             else:
                 self.reach_last = False
-        elif (rospy.Time.now().to_sec() - self.begin_time <= 30):
+        elif (rospy.Time.now().to_sec() - self.begin_time <= 37):
             p, v, q, br, u = self.getReference(experiment=self.expriment,start_point=self.start_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, model=self.quadrotorOptimizer.quadrotorModel, plot=False)
-            error = np.linalg.norm(np.array(self.p) - p[0])
-            self.pose_error += error
+            error_pose = np.linalg.norm(np.array(self.p) - p[0])
+            error_vel  = np.linalg.norm(np.array(self.v) - v[0])
+            error_q    = np.linalg.norm(np.array(self.q) - q[0])
+            error_br   = np.linalg.norm(np.array(self.w) - br[0])
+            self.pose_error += error_pose
             self.pose_error_num += 1
-            if error > self.pose_error_max:
-                self.pose_error_max = error
+            if error_pose > self.pose_error_max:
+                self.pose_error_max = error_pose
         else:
             self.trigger = False
             self.pose_error_mean = self.pose_error / self.pose_error_num
@@ -178,23 +187,32 @@ class QuadMPC:
             print("error mean: ", self.pose_error_mean)
             return
 
+        v_b = v_dot_q(v[0], quaternion_inverse(np.array(self.q)))
+        vb_abs = np.linalg.norm(v_dot_q(self.v, quaternion_inverse(np.array(self.q))))
         desire = Odometry()
         desire.pose.pose.position.x, desire.pose.pose.position.y, desire.pose.pose.position.z = p[0, 0], p[0, 1], p[0, 2]
-        desire.pose.pose.orientation.w, desire.pose.pose.orientation.x, desire.pose.pose.orientation.y, desire.pose.pose.orientation.z = u[0, 0], u[0, 1], u[0, 2], u[0, 3]
-        desire.twist.twist.linear.x, desire.twist.twist.linear.y, desire.twist.twist.linear.z = v[0, 0], v[0, 1], v[0, 2]
-
+        desire.pose.pose.orientation.w, desire.pose.pose.orientation.x, desire.pose.pose.orientation.y, desire.pose.pose.orientation.z = q[0, 0], q[0, 1], q[0, 2], q[0, 3]
+        desire.twist.twist.linear.x, desire.twist.twist.linear.y, desire.twist.twist.linear.z = v_b[0], v_b[1], v_b[2]
+        desire.twist.twist.angular.x, desire.twist.twist.angular.x, desire.twist.twist.angular.x = br[0, 0], br[0, 1], br[0, 2]
         self.desire_pub.publish(desire)
+
+        desire_motor = Actuators()
+        desire_motor.angular_velocities = u[0]
+        desire_motor.angles = np.array([error_pose, error_vel, error_q, error_br, vb_abs])
+        self.desire_motor_pub.publish(desire_motor)
 
         self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
         self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
         for i in range(self.N):
             xref = np.concatenate((p[i], v[i], q[i], br[i], ))
-            # self.quadrotorOptimizer.acados_solver.set(i, 'x', xref)
+            self.quadrotorOptimizer.acados_solver.set(i, 'x', xref)
             self.quadrotorOptimizer.acados_solver.set(i, 'yref', np.concatenate((xref, u[i])))
             self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
+            # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
         xref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N]))
-        # self.quadrotorOptimizer.acados_solver.set(self.N, 'x', xref)
+        self.quadrotorOptimizer.acados_solver.set(self.N, 'x', xref)
         self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
+        # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
 
         time = rospy.Time.now().to_sec()
         self.quadrotorOptimizer.acados_solver.solve()
@@ -252,6 +270,10 @@ class QuadMPC:
     def getReference(self, experiment, start_point, time_now, t_horizon, N_node, model, plot):
         if start_point is None:
             start_point = np.array([0, 0, 3])
+        if abs(self.start_point[0]) < 0.1:
+            r = 5
+        else:
+            r = self.start_point[0]
         p = np.zeros((N_node + 1, 3))
         v = np.zeros((N_node + 1, 3))
         a = np.zeros((N_node + 1, 3))
@@ -267,14 +289,14 @@ class QuadMPC:
             p[:, 0] = start_point[0]
             p[:, 1] = start_point[1]
             p[:, 2] = start_point[2]
+            yaw[:] = np.pi / 4
             # u = math.sqrt(self.quadrotorOptimizer.quadrotorModel.g[-1] * self.quadrotorOptimizer.quadrotorModel.mass / self.quadrotorOptimizer.quadrotorModel.kT / 4)
             # u = np.ones((self.N, 4)) * u
 
         elif experiment == 'circle':
-            r = 5
             w = 0.5 # rad/s
             phi = 0
-            p[:, 0] = r * np.cos(w * t + phi) - r
+            p[:, 0] = r * np.cos(w * t + phi)
             p[:, 1] = r * np.sin(w * t + phi)
             p[:, 2] = start_point[2]
             v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
@@ -289,27 +311,48 @@ class QuadMPC:
             s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
             s[:, 1] = w ** 4 * r * np.sin(w * t + phi)
             s[:, 2] = 0
-
         elif experiment == 'circle_speedup':
-            r = 5
             w_rate = 0.03
-            w = t * w_rate # rad/s
+            # w = t * w_rate # rad/s
             phi = 0
-            p[:, 0] = r * np.cos(w * t + phi) - r
-            p[:, 1] = r * np.sin(w * t + phi)
+            p[:, 0] = r * np.cos(w_rate * t ** 2 + phi)
+            p[:, 1] = r * np.sin(w_rate * t ** 2 + phi)
             p[:, 2] = start_point[2]
-            v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
-            v[:, 1] = w ** 1 * r * np.cos(w * t + phi)
+            v[:, 0] = - 2 * w_rate * t * r * np.sin(w_rate * t ** 2 + phi)
+            v[:, 1] = 2 * w_rate * t * r * np.cos(w_rate * t ** 2 + phi)
             v[:, 2] = 0
-            a[:, 0] = - w ** 2 * r * np.cos(w * t + phi)
-            a[:, 1] = - w ** 2 * r * np.sin(w * t + phi)
+            a[:, 0] = - 2 * w_rate * r * np.sin(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 2 * r * np.cos(w_rate * t ** 2 + phi)
+            a[:, 1] = 2 * w_rate * r * np.cos(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 2 * r * np.sin(w_rate * t ** 2 + phi)
             a[:, 2] = 0
-            j[:, 0] = w ** 3 * r * np.sin(w * t + phi)
-            j[:, 1] = - w ** 3 * r * np.cos(w * t + phi)
+            j[:, 0] = - 4 * w_rate ** 2 * t * r * np.cos(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * t * r * np.cos(w_rate * t ** 2 + phi) + (2 * w_rate * t) ** 3 * r * np.sin(w_rate * t ** 2 + phi)
+            j[:, 1] = - 4 * w_rate ** 2 * t * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * t * r * np.sin(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 3 * r * np.cos(w_rate * t ** 2 + phi)
             j[:, 2] = 0
-            s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
-            s[:, 1] = w ** 4 * r * np.sin(w * t + phi)
+            s[:, 0] = - 4 * w_rate ** 2 * r * np.cos(w_rate * t ** 2 + phi) + 8 * w_rate ** 3 * t ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * r * np.cos(w_rate * t ** 2 + phi) + 16 * w_rate ** 3 * t ** 2 * r * np.sin(w_rate * t ** 2 + phi) + 6 * (2 * w_rate * t) ** 2 * w_rate * r * np.sin(w_rate * t ** 2 + phi) + (2 * w_rate * t) ** 4 * r * np.cos(w_rate * t ** 2 + phi)
+            s[:, 1] = - 4 * w_rate ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 3 * t ** 2 * r * np.cos(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 16 * w_rate ** 3 * t ** 2 * r * np.cos(w_rate * t ** 2 + phi) - 6 * (2 * w_rate * t) ** 2 * w_rate * r * np.cos(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 4 * r * np.sin(w_rate * t ** 2 + phi)
             s[:, 2] = 0
+        elif experiment == 'lemniscate':
+            w = 0.5
+            phi = 0
+            theta = t * w + phi
+            # p[:, 0] = r * np.cos(theta) * np.sqrt(np.cos(2 * theta))
+            # p[:, 1] = r * np.sin(theta) * np.sqrt(np.cos(2 * theta))
+            p[:, 0] = - r * np.cos(theta) * np.sin(theta) / (1 + np.sin(theta) ** 2)
+            p[:, 1] = r * np.cos(theta) / (1 + np.sin(theta) ** 2)
+            p[:, 2] = start_point[2]
+        elif experiment == 'lemniscate_speedup':
+            w_rate = 0.02
+            phi = np.pi / 2
+            theta = w_rate * t ** 2 + phi
+            # p[:, 0] = r * np.cos(theta) * np.sqrt(np.cos(2 * theta))
+            # p[:, 1] = r * np.sin(theta) * np.sqrt(np.cos(2 * theta))
+            p[:, 0] = - r * np.cos(theta) * np.sin(theta) / (1 + np.sin(theta) ** 2)
+            p[:, 1] = r * np.cos(theta) / (1 + np.sin(theta) ** 2)
+            p[:, 2] = start_point[2]
+
+        for i in range(len(p)):
+            yaw[i] = math.atan2(v[i, 1], v[i, 0])
+            yawdot[i] = math.atan2(a[i, 1], a[i, 0])
+            yawdotdot[i] = math.atan2(j[i, 1], j[i, 0])
 
         q, euler_angle, br, u = getReference_Quaternion_Bodyrates_RotorSpeed(v=v, a=a, j=j, s=s, yaw=yaw, yawdot=yawdot, yawdotdot=yawdotdot, model=model)
 

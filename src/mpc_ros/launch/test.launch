@@ -1,13 +1,14 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <arg name="expriment" default="hover"/>
+    <arg name="expriment" default="lemniscate_speedup"/>
     <arg name="hover_x" default="0"/>
     <arg name="hover_y" default="0"/>
     <arg name="hover_z" default="10"/>
 
     <!-- circle
     circle_speedup
-    hover -->
+    hover 
+    lemniscate -->
 
     <!-- <include file="$(find mpc_ros)/launch/quadrotor_empty_world.launch">
     </include> -->

@@ -147,10 +147,11 @@ class QuadrotorOptimizer:
         self.ocp.solver_options.print_level = 0
         # self.ocp.solver_options.sim_method_num_stages = 4
         # self.ocp.solver_options.sim_method_num_steps = 3
-        # self.ocp.solver_options.nlp_solver_step_length = 0.05
-        # self.ocp.solver_options.nlp_solver_max_iter = 200
-        # self.ocp.solver_options.tol = 1e-4
-        # self.ocp.solver_options.nlp_solver_tol_comp = 1e-1
+        # self.ocp.solver_options.nlp_solver_step_length = 0.05 # default: 1
+        # self.ocp.solver_options.nlp_solver_max_iter = 200 # default: 100
+        # self.ocp.solver_options.tol = 1e-4 
+        # self.ocp.solver_options.nlp_solver_tol_comp = 1e-1 
+        self.ocp.solver_options.qp_solver_warm_start = 1
         
 
         # create solver
