@@ -29,8 +29,7 @@ def crossmat(vec):
             ca.horzcat(-vec[1], vec[0] , 0      ))
 
 def v1_cross_v2(vec1, vec2):
-    vec_mat = crossmat(vec1)
-    return np.dot(vec_mat, vec2.T)
+    return np.dot(crossmat(vec1), vec2.T)
 
 def unit_quat(q):
     if isinstance(q, np.ndarray):
@@ -66,6 +65,19 @@ def quat_to_rotation_matrix(quaternions):
             ca.horzcat(1 - 2 * (q2 ** 2 + q3 ** 2), 2 * (q1 * q2 - q0 * q3), 2 * (q1 * q3 + q0 * q2)),
             ca.horzcat(2 * (q1 * q2 + q0 * q3), 1 - 2 * (q1 ** 2 + q3 ** 2), 2 * (q2 * q3 - q0 * q1)),
             ca.horzcat(2 * (q1 * q3 - q0 * q2), 2 * (q2 * q3 + q0 * q1), 1 - 2 * (q1 ** 2 + q2 ** 2)))
+
+def quaternion_to_euler(q):
+    q = pyquaternion.Quaternion(w=q[0], x=q[1], y=q[2], z=q[3])
+    yaw, pitch, roll = q.yaw_pitch_roll
+    return np.array([roll, pitch, yaw])
+
+def euler_to_quaternion(roll, pitch, yaw):
+    qx = np.sin(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) - np.cos(roll / 2) * np.sin(pitch / 2) * np.sin(yaw / 2)
+    qy = np.cos(roll / 2) * np.sin(pitch / 2) * np.cos(yaw / 2) + np.sin(roll / 2) * np.cos(pitch / 2) * np.sin(yaw / 2)
+    qz = np.cos(roll / 2) * np.cos(pitch / 2) * np.sin(yaw / 2) - np.sin(roll / 2) * np.sin(pitch / 2) * np.cos(yaw / 2)
+    qw = np.cos(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) + np.sin(roll / 2) * np.sin(pitch / 2) * np.sin(yaw / 2)
+
+    return np.array([qw, qx, qy, qz])
 
 def skew_symmetric(v):
     if isinstance(v, np.ndarray):
@@ -108,7 +120,7 @@ def rotation_matrix_to_quat(rot):
     q = pyquaternion.Quaternion(matrix=rot)
     return np.array([q.w, q.x, q.y, q.z])
 
-def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdotdot, model):
+def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdotdot, model, dt):
     N_reference = len(v)
     q = np.zeros((N_reference, 4))
     euler_angle = np.zeros((N_reference, 3))
@@ -131,14 +143,18 @@ def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdot
         alpha = m * (a[i] + g) + dx * v[i]
         beta = m * (a[i] + g) + dy * v[i]
         
-        xb = v1_cross_v2(yc, alpha)
+        xb = np.cross(yc, alpha)
+        # xb = v1_cross_v2(yc, alpha)
         xb = xb / np.linalg.norm(xb)
-        yb = v1_cross_v2(beta, xb)
+        yb = np.cross(beta, xb)
+        # yb = v1_cross_v2(beta, xb)
         yb = yb / np.linalg.norm(yb)
-        zb = v1_cross_v2(xb, yb)
+        zb = np.cross(xb, yb)
+        # zb = v1_cross_v2(xb, yb)
         rotation_mat = np.concatenate((xb.reshape(3, 1), yb.reshape(3, 1), zb.reshape(3, 1)), axis=1)
         q[i] = rotation_matrix_to_quat(rotation_mat)
-        euler_angle[i] = rotation_matrix_to_euler(rotation_mat)
+        euler_angle[i] = quaternion_to_euler(q[i])
+        # q[i] = euler_to_quaternion(euler_angle[i, 0], euler_angle[i, 1], euler_angle[i, 2])
         drag = kh * (np.dot(xb, v[i].T) ** 2 + np.dot(yb, v[i].T) ** 2)
         thrust[i] = np.dot(zb, m * a[i].T + m * g.T + dz * v[i].T) - drag
         
@@ -146,31 +162,147 @@ def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdot
         A_br = np.zeros((3, 3))
         b_br = np.zeros((3,))
         A_br[0, 1] = thrust[i] + (dx - dz) * np.dot(zb, v[i].T) + drag
-        A_br[0, 2] = (dy - dx) * np.dot(yb, v[i].T)
+        A_br[0, 2] = -(dx - dy) * np.dot(yb, v[i].T)
         A_br[1, 0] = thrust[i] + (dy - dz) * np.dot(zb, v[i].T) + drag
         A_br[1, 2] = (dx - dy) * np.dot(xb, v[i].T)
         A_br[2, 1] = -np.dot(yc, zb.T)
-        A_br[2, 2] = np.linalg.norm(v1_cross_v2(yc, zb))
+        A_br[2, 2] = np.linalg.norm(np.cross(yc, zb))
         b_br[0] = m * np.dot(xb, j[i].T) + dx * np.dot(xb, a[i].T)
         b_br[1] = -m * np.dot(yb, j[i].T) - dy * np.dot(yb, a[i].T)
         b_br[2] = yawdot[i] * np.dot(xc, xb.T)
         br[i] = np.linalg.solve(A_br, b_br)
+        # br[i, 0] = -m * np.dot(yb, j[i].T) / thrust[i]
+        # br[i, 1] = m * np.dot(xb, j[i].T) / thrust[i]
+        # br[i, 2] = (yawdot[i] * np.dot(xc, xb.T) + br[i, 1] * np.dot(yc, zb.T)) / np.linalg.norm(np.cross(yc, zb))
         brx, bry, brz = br[i, 0], br[i, 1], br[i, 2]
         thrustdot[i] = m * np.dot(zb, j[i].T) + dz * np.dot(zb, a[i].T) + brx * np.dot(yb, v[i].T) * (dy + dz - 2 * kh * np.dot(zb, v[i].T)) - bry * np.dot(xb, v[i].T) * (dx + dz - 2 * kh * np.dot(zb, v[i].T))
+        # thrustdot = np.gradient(thrust) / dt
 
         # Bodyratesdot
         b_brdot = np.zeros((3,))
-        b_brdot[0] = m * np.dot(xb, s[i].T) + m * np.dot(brz * yb - bry * zb, j[i].T) + dx * (brz * np.dot(yb, a[i].T) - bry * np.dot(zb, a[i].T) + np.dot(xb, j[i].T)) - brz * (dx - dy) + bry * (thrustdot[i])
-        b_brdot[1] = -m * np.dot(yb, s[i].T) - m * np.dot(-brz * xb + brx * zb, j[i].T) - dy * (-brz * np.dot(xb, a[i].T) + brx * np.dot(zb, a[i].T) + np.dot(yb, j[i].T)) - brz * (dx - dy) - brx * (thrustdot[i])
+        b_brdot[0] = m * np.dot(xb, s[i].T) + m * np.dot(brz * yb - bry * zb, j[i].T) + dx * (brz * np.dot(yb, a[i].T) - bry * np.dot(zb, a[i].T) + np.dot(xb, j[i].T)) - bry * (thrustdot[i] + (dx - dz) * (np.dot(bry * xb - brx * yb, v[i].T) + np.dot(zb, a[i].T)) + 2 * kh) + brz * (dx - dy) * (np.dot(-brz * xb + brx * zb, v[i].T + np.dot(yb, a[i].T)))
+        b_brdot[1] = -m * np.dot(yb, s[i].T) - m * np.dot(-brz * xb + brx * zb, j[i].T) - dy * (-brz * np.dot(xb, a[i].T) + brx * np.dot(zb, a[i].T) + np.dot(yb, j[i].T)) - brx * (thrustdot[i] + (dy - dz)) - brz * (dx - dy)
         b_brdot[2] = yawdotdot[i] * np.dot(xc, xb.T) + (yawdot[i] ** 2 + bry ** 2) * np.dot(yc, xb.T) - 2 * yawdot[i] * bry * np.dot(xc, zb.T) - brx * bry * np.dot(yc, yb.T) + yawdot[i] * brz * np.dot(xc, yb.T)
+        # b_brdot[0] = m * np.dot(xb, s[i].T) - 2 * thrustdot[i] * bry - thrust[i] * brx * brz
+        # b_brdot[1] = -m * np.dot(yb, s[i].T) - 2 * thrustdot[i] * brx + thrust[i] * bry * brz
+        # b_brdot[2] = yawdotdot[i] * np.dot(xc, xb.T) + 2 * yawdot[i] * (brz * np.dot(xc, yb.T) - bry * np.dot(xc, zb)) - brx * np.dot(yc, bry * yb.T + brz * zb.T)
         brdot[i] = np.linalg.solve(A_br, b_brdot)
 
         # u
-        tao = np.dot(Inertia, brdot[i].T) + np.dot(v1_cross_v2(br[i], Inertia), br[i].T)
-        # print(np.dot(Ginv, np.array([thrust[i], tao[0], tao[1], tao[2]]).T))
+        # tao = np.dot(Inertia, brdot[i].T) + np.dot(np.cross(br[i], Inertia), br[i].T)
+        tao = np.dot(Inertia, brdot[i].T) + np.dot(np.dot(crossmat(br[i]), Inertia), br[i].T)
+        # print(tao)
         u[i] = np.sqrt(np.dot(Ginv, np.array([thrust[i], tao[0], tao[1], tao[2]]).T))
 
     return q, euler_angle, br, u
+
+def draw_data_sim(x_data, x_sim, motor_data, t):
+    euler_angle = np.zeros((len(x_data), 3))
+    euler_angle_sim = np.zeros((len(x_data), 3))
+    for i in range(len(x_data)):
+        euler_angle[i] = quaternion_to_euler(x_data[i, 6:10])
+        euler_angle_sim[i] = quaternion_to_euler(x_sim[i, 6:10])
+
+    fig=plt.figure(figsize=(27,18))# ,figsize=(9,9)
+
+    ax1=fig.add_subplot(2,6,1) # , projection='3d'
+    ax1.set_title("pose")
+    ax1.plot(t,x_data[:,0], label='x')
+    ax1.plot(t,x_data[:,1], label='y')
+    ax1.plot(t,x_data[:,2], label='z')
+    ax1.legend()
+    ax1.grid()
+
+    ax2=fig.add_subplot(2,6,2)
+    ax2.set_title("velocity")
+    ax2.plot(t,x_data[:,3], label='x')
+    ax2.plot(t,x_data[:,4], label='y')
+    ax2.plot(t,x_data[:,5], label='z')
+    ax2.legend()
+    ax2.grid()
+
+    ax3=fig.add_subplot(2,6,3)
+    ax3.set_title("euler angle")
+    ax3.plot(t,euler_angle[:, 0], label='x')
+    ax3.plot(t,euler_angle[:, 1], label='y')
+    ax3.plot(t,euler_angle[:, 2], '.', label='z')
+    ax3.legend()
+    ax3.grid()
+
+    ax4=fig.add_subplot(2,6,4)
+    ax4.set_title("quat")
+    ax4.plot(t,x_data[:,6], label='w')
+    ax4.plot(t,x_data[:,7], label='x')
+    ax4.plot(t,x_data[:,8], label='y')
+    ax4.plot(t,x_data[:,9], label='z')
+    ax4.legend()
+    ax4.grid()
+
+    ax5=fig.add_subplot(2,6,5)
+    ax5.set_title("bodyrate")
+    ax5.plot(t,x_data[:,10], label='x')
+    ax5.plot(t,x_data[:,11], label='y')
+    ax5.plot(t,x_data[:,12], label='z')
+    ax5.legend()
+    ax5.grid()
+    
+    ax6=fig.add_subplot(2,6,6)
+    ax6.set_title("motor speed")
+    ax6.plot(t,motor_data[:, 0], label='u1')
+    ax6.plot(t,motor_data[:, 1], label='u2')
+    ax6.plot(t,motor_data[:, 2], label='u3')
+    ax6.plot(t,motor_data[:, 3], label='u4')
+    ax6.legend()
+    ax6.grid()
+    
+    ax7=fig.add_subplot(2,6,7)
+    ax7.set_title("sim pose")
+    ax7.plot(t,x_sim[:,0], label='x')
+    ax7.plot(t,x_sim[:,1], label='y')
+    ax7.plot(t,x_sim[:,2], label='z')
+    ax7.legend()
+    ax7.grid()
+
+    ax8=fig.add_subplot(2,6,8)
+    ax8.set_title("sim velocity")
+    ax8.plot(t,x_sim[:,3], label='x')
+    ax8.plot(t,x_sim[:,4], label='y')
+    ax8.plot(t,x_sim[:,5], label='z')
+    ax8.legend()
+    ax8.grid()
+
+    ax9=fig.add_subplot(269)
+    ax9.set_title("sim euler angle")
+    ax9.plot(t,euler_angle_sim[:, 0], label='x')
+    ax9.plot(t,euler_angle_sim[:, 1], label='y')
+    ax9.plot(t,euler_angle_sim[:, 2], label='z')
+    ax9.legend()
+    ax9.grid()
+
+    ax10=fig.add_subplot(2,6,10)
+    ax10.set_title("sim quat")
+    ax10.plot(t,x_sim[:,6], label='w')
+    ax10.plot(t,x_sim[:,7], label='x')
+    ax10.plot(t,x_sim[:,8], label='y')
+    ax10.plot(t,x_sim[:,9], label='z')
+    ax10.legend()
+    ax10.grid()
+
+    ax11=fig.add_subplot(2,6,11)
+    ax11.set_title("sim bodyrate")
+    ax11.plot(t,x_sim[:,10], label='x')
+    ax11.plot(t,x_sim[:,11], label='y')
+    ax11.plot(t,x_sim[:,12], label='z')
+    ax11.legend()
+    ax11.grid()
+
+    ax12=fig.add_subplot(2,6,12, projection='3d')
+    ax12.set_title("sim pose")
+    ax12.plot(x_sim[:, 0],x_sim[:, 1], x_sim[:, 2], label='pose')
+    ax12.legend()
+    ax12.grid()
+    plt.show()
+    return
 
 def parse_xacro_file(xacro):
     """

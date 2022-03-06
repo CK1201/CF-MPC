@@ -1,14 +1,17 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <arg name="expriment" default="lemniscate_speedup"/>
-    <arg name="hover_x" default="0"/>
+    <arg name="expriment" default="circle_speedup"/>
+    <arg name="hover_x" default="5"/>
     <arg name="hover_y" default="0"/>
     <arg name="hover_z" default="10"/>
+    <arg name="plot" default="false"/>
+    <arg name="fit_param" default="true"/>
 
     <!-- circle
     circle_speedup
     hover 
-    lemniscate -->
+    lemniscate
+    lemniscate_speedup -->
 
     <!-- <include file="$(find mpc_ros)/launch/quadrotor_empty_world.launch">
     </include> -->
@@ -19,5 +22,7 @@
         <param name="hover_x" value="$(arg hover_x)"/>
         <param name="hover_y" value="$(arg hover_y)"/>
         <param name="hover_z" value="$(arg hover_z)"/>
+        <param name="plot" value="$(arg plot)"/>
+        <param name="fit_param" value="$(arg fit_param)"/>
     </node>
 </launch>
