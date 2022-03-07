@@ -27,13 +27,13 @@ class QuadrotorModel:
         self.kM = float(attrib['moment_constant'])
         self.D = np.zeros((3, 3))
         self.kh = 0
+        self.A = 0
+        self.B = 0
         self.Inertia = np.array([
             [float(attrib['body_inertia'][0]['ixx']), float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['ixz'])],
             [float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['iyy']), float(attrib['body_inertia'][0]['iyz'])],
             [float(attrib['body_inertia'][0]['ixz']), float(attrib['body_inertia'][0]['iyz']), float(attrib['body_inertia'][0]['izz'])]
         ])
-        
-        # print(self.Inertia)
 
         # rotor
         RotorSpeed_min = 0
@@ -53,7 +53,7 @@ class QuadrotorModel:
                           [0, self.arm_length , 0, -self.arm_length],
                           [-self.arm_length, 0 , self.arm_length, 0],
                           [-1, 1, -1, 1]])
-        self.G = ca.mtimes(np.diag([self.kT, self.kT, self.kT, self.kT * self.kM]), self.G)
+        self.G = np.diag([self.kT, self.kT, self.kT, self.kT * self.kM]) @ self.G
 
         # x
         p = ca.SX.sym("P", 3, 1)
@@ -134,26 +134,38 @@ class QuadrotorModel:
         x = [p0, v0, q0, br0]
         k1 = [self.f_p(x), self.f_v(x, u), self.f_q(x), self.f_br(x, u)]
         x_aux = [x[i] + dt / 2 * k1[i] for i in range(4)]
+        x_aux = self.unit_x(x_aux)
         k2 = [self.f_p(x_aux), self.f_v(x_aux, u), self.f_q(x_aux), self.f_br(x_aux, u)]
         x_aux = [x[i] + dt / 2 * k2[i] for i in range(4)]
+        x_aux = self.unit_x(x_aux)
         k3 = [self.f_p(x_aux), self.f_v(x_aux, u), self.f_q(x_aux), self.f_br(x_aux, u)]
         x_aux = [x[i] + dt * k3[i] for i in range(4)]
+        x_aux = self.unit_x(x_aux)
         k4 = [self.f_p(x_aux), self.f_v(x_aux, u), self.f_q(x_aux), self.f_br(x_aux, u)]
-        x = [x[i] + dt * (1.0 / 6.0 * k1[i] + 2.0 / 6.0 * k2[i] + 2.0 / 6.0 * k3[i] + 1.0 / 6.0 * k4[i]) for i in range(4)]
-        x[2] = unit_quat(x[2])
-        return x
+        x = [x[i] + dt / 6 * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]) for i in range(4)]
+        # x[2] = unit_quat(x[2])
+        return self.unit_x(x)
+
+    def unit_x(self, x):
+        return [x[0], x[1], unit_quat(x[2]), x[3]]
 
     def f_p(self, x):
         return x[1]
 
     def f_v(self, x, u):
-        rotation_mat0 = quat_to_rotation_matrix(x[2])
-        temp_input = np.dot(self.G, u.T ** 2)
-        return -np.array([0, 0, 9.81]) + temp_input[0] / self.mass * rotation_mat0[:, 2]
+        a_thrust = np.array([0, 0, np.dot(self.G, u.T ** 2)[0]]) / self.mass
+        rotMat = quat_to_rotation_matrix(np.array(x[2]))
+        vh = rotMat.T.dot(np.array(x[1]).T)
+        vh[2] = 0
+        drag = rotMat.dot(self.D).dot(rotMat.T).dot(np.array(x[1]).T) - self.kh * vh.dot(vh) * rotMat[:,2]
+        return -np.array([0, 0, 9.81]) + v_dot_q(a_thrust, np.array(x[2])) - drag / self.mass
         
     def f_q(self, x):
-        return 1 / 2 * np.dot(skew_symmetric(x[3]), x[2].T)
+        return 1 / 2 * skew_symmetric(x[3]).dot(x[2])
 
     def f_br(self, x, u):
-        temp_input = np.dot(self.G, u.T ** 2)
-        return np.dot(np.linalg.inv(self.Inertia), (temp_input[1:] - np.dot(v1_cross_v2(x[3], self.Inertia), x[3].T)).T)
+        rotMat = quat_to_rotation_matrix(np.array(x[2]))
+        tao = np.dot(self.G, u.T ** 2)[1:]
+        # tao_d = -self.A.dot(rotMat.T).dot(np.array(x[1]).T) - self.B.dot(u.T)
+        # return np.dot(np.linalg.inv(self.Inertia), tao.T - np.dot(np.dot(crossmat(x[3]), self.Inertia), np.array(x[3]).T))
+        return np.dot(np.linalg.inv(self.Inertia), tao.T - crossmat(x[3]).dot(self.Inertia).dot(np.array(x[3]).T))

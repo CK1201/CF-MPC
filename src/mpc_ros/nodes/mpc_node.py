@@ -8,6 +8,7 @@ import numpy as np
 from std_msgs.msg import Int16, Bool
 from nav_msgs.msg import Odometry
 from mav_msgs.msg import Actuators
+from sensor_msgs.msg import Imu
 from quadrotor_msgs.msg import ControlCommand, AutopilotFeedback
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from std_srvs.srv import Empty
@@ -58,6 +59,7 @@ class QuadMPC:
         self.trigger = False
         self.reach_start_point = False
         self.start_record_fit_data = True
+        self.start_record = False
         # load model
         self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N)
         # Subscribers
@@ -65,12 +67,13 @@ class QuadMPC:
         self.trigger_sub = rospy.Subscriber('/' + quad_name + '/trigger', std_msgs.msg.Empty, self.trigger_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
         # message filter
-        if self.havenot_fit_param:
-            self.odom_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry)
-            self.motor_sub_filter = message_filters.Subscriber('/' + quad_name + '/motor_speed', Actuators)
-            self.TimeSynchronizer = message_filters.TimeSynchronizer([self.odom_sub_filter, self.motor_sub_filter], 2)
-            self.TimeSynchronizer.registerCallback(self.TimeSynchronizer_callback)
-            self.x_data = np.array([])
+        # if self.havenot_fit_param:
+        self.imu_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/imu', Imu)
+        self.odom_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry)
+        self.motor_sub_filter = message_filters.Subscriber('/' + quad_name + '/motor_speed', Actuators)
+        self.TimeSynchronizer = message_filters.TimeSynchronizer([self.imu_sub_filter, self.odom_sub_filter, self.motor_sub_filter], 1)
+        self.TimeSynchronizer.registerCallback(self.TimeSynchronizer_callback)
+        self.x_data = np.array([])
         # Publishers
         self.arm_pub = rospy.Publisher('/' + quad_name + '/bridge/arm', Bool, queue_size=1, tcp_nodelay=True)
         self.start_autopilot_pub = rospy.Publisher('/' + quad_name + '/autopilot/start', std_msgs.msg.Empty, queue_size=1, tcp_nodelay=True)
@@ -91,6 +94,7 @@ class QuadMPC:
         self.start_record_time = rospy.Time.now().to_sec()
         self.record_time = 5
         self.reach_last = False
+        self.finish_tracking = False
         self.pose_error = 0
         self.pose_error_max = 0
         self.pose_error_num = 0
@@ -144,10 +148,14 @@ class QuadMPC:
 
         rate = rospy.Rate(N / t_horizon)
         while not rospy.is_shutdown():
+            if self.finish_tracking:
+                x_sim = self.Simulation(self.x_data, self.motor_data, self.t_data - self.begin_time)
+                draw_data_sim(self.x_data, x_sim, self.motor_data, self.t_data - self.begin_time)
+                self.finish_tracking = False
             if self.havenot_fit_param:
                 print("Rest of the time to record data: ", self.record_time - (rospy.Time.now().to_sec() - self.start_record_time))
                 if (rospy.Time.now().to_sec() - self.start_record_time) >= self.record_time:
-                    self.fitParam(self.x_data, self.motor_data, self.t_data)
+                    self.fitParam(self.x_data, self.a_data, self.motor_data, self.t_data, True)
                     return
             rate.sleep()
 
@@ -171,24 +179,28 @@ class QuadMPC:
         self.have_ap_fb = True
         self.ap_state =  msg.autopilot_state
 
-    def TimeSynchronizer_callback(self, odom_msg, motor_msg):
-        if not(self.start_record_fit_data):
+    def TimeSynchronizer_callback(self, imu_msg, odom_msg, motor_msg):
+        if not(self.start_record):
             return
         p = [odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y, odom_msg.pose.pose.position.z]
         q = [odom_msg.pose.pose.orientation.w, odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z]
         v = v_dot_q(np.array([odom_msg.twist.twist.linear.x, odom_msg.twist.twist.linear.y, odom_msg.twist.twist.linear.z]), np.array(self.q)).tolist()
         w = [odom_msg.twist.twist.angular.x, odom_msg.twist.twist.angular.y, odom_msg.twist.twist.angular.z]
+        a = [imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z]
 
         if len(self.x_data) == 0:
             self.x_data = np.zeros((1, 13))
             self.x_data[0] = np.concatenate((p, v, q, w))
+            self.a_data = np.zeros((1, 3))
+            self.a_data[0] = np.array(a)
             self.motor_data = np.zeros((1, 4))
             self.motor_data[0] = motor_msg.angular_velocities
-            self.t_data = np.array([odom_msg.header.stamp.to_sec()])
+            self.t_data = np.array([motor_msg.header.stamp.to_sec()])
         else:
             self.x_data = np.concatenate((self.x_data, np.concatenate((p, v, q, w))[np.newaxis,:]), axis=0)
+            self.a_data = np.concatenate((self.a_data, np.array(a)[np.newaxis,:]), axis=0)
             self.motor_data = np.concatenate((self.motor_data, np.array(motor_msg.angular_velocities)[np.newaxis,:]), axis=0)
-            self.t_data = np.concatenate((self.t_data, np.array([odom_msg.header.stamp.to_sec()])))
+            self.t_data = np.concatenate((self.t_data, np.array([motor_msg.header.stamp.to_sec()])))
             
     def QuadMPCFSM(self, event):
         if not(self.have_odom) or not(self.trigger) or self.havenot_fit_param:
@@ -207,9 +219,13 @@ class QuadMPC:
                 else:
                     self.reach_start_point = True
                     self.begin_time = rospy.Time.now().to_sec()
+                    self.start_record = True
+                    # self.start_x = self.x0
+                    # self.motor_data_rec = np.zeros((1,4))
+                    # self.motor_data_rec[0] = 
             else:
                 self.reach_last = False
-        elif (rospy.Time.now().to_sec() - self.begin_time <= 45):
+        elif (rospy.Time.now().to_sec() - self.begin_time <= 15):
             p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, model=self.quadrotorOptimizer.quadrotorModel, plot=False)
             error_pose = np.linalg.norm(np.array(self.p) - p[0])
             error_vel  = np.linalg.norm(np.array(self.v) - v[0])
@@ -221,11 +237,13 @@ class QuadMPC:
                 self.pose_error_max = error_pose
         else:
             self.trigger = False
+            self.start_record = False
             self.pose_error_mean = self.pose_error / self.pose_error_num
             self.pose_error = 0
             self.pose_error_num = 0
             print("error max : ", self.pose_error_max)
             print("error mean: ", self.pose_error_mean)
+            self.finish_tracking = True
             return
 
         v_b = v_dot_q(v[0], quaternion_inverse(np.array(self.q)))
@@ -543,16 +561,20 @@ class QuadMPC:
 
         return p, v, q, br, u
 
-    def fitParam(self, x_data, motor_data, t):
-        self.havenot_fit_param = False
+    def Simulation(self, x_data, motor_data, t):
         model = self.quadrotorOptimizer.quadrotorModel
-        t = t - self.start_record_time
-        x_sim = np.zeros_like(x_data)
+        x_sim = np.zeros((len(motor_data), 13))
         x_sim[0] = x_data[0]
-        for i in range(len(x_data) - 1):
-            x_sim[i + 1] = np.concatenate((model.Simulation(x_data[i, :3], x_data[i, 3:6], x_data[i, 6:10], x_data[i, 10:], np.abs(motor_data[i]), t[i + 1] - t[i])))
-        draw_data_sim(x_data, x_sim, motor_data, t)
-        
+        for i in range(len(motor_data) - 1):
+            x_sim[i + 1] = np.concatenate((model.Simulation(x_sim[i, :3], x_sim[i, 3:6], x_sim[i, 6:10], x_data[i, 10:], np.abs(motor_data[i]), t[i + 1] - t[i])))
+        return x_sim
+
+    def fitParam(self, x_data, a_data, motor_data, t, draw):
+        self.havenot_fit_param = False
+        t = t - self.start_record_time
+        x_sim = self.Simulation(x_data[0], motor_data, t)
+        if draw:
+            draw_data_sim(x_data, x_sim, motor_data, t)
         return
 
     def shutdown_node(self):
