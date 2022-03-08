@@ -2,10 +2,10 @@ import os, scipy.linalg
 import numpy as np
 import casadi as ca
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
-from src.quad_mpc.quad_model import QuadrotorModel
+# from src.quad_mpc.quad_model import QuadrotorModel
 
 class QuadrotorOptimizer:
-    def __init__(self, Tf, N) -> None:
+    def __init__(self, Tf, N, quadrotorModel) -> None:
         self.ocp = AcadosOcp()
         # acados_solver = AcadosOcpSolver(ocp)
         acados_source_path = os.environ['ACADOS_SOURCE_DIR']
@@ -14,7 +14,7 @@ class QuadrotorOptimizer:
 
 
         acModel = AcadosModel()
-        self.quadrotorModel = QuadrotorModel(configuration='+')
+        self.quadrotorModel = quadrotorModel
         model, constraint = self.quadrotorModel.model, self.quadrotorModel.constraint
 
         # define acados ODE

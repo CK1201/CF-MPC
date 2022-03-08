@@ -1,11 +1,11 @@
-import os
+import os, yaml
 from re import I
 import casadi as ca
 import numpy as np
 from src.utils.utils import *
 
 class QuadrotorModel:
-    def __init__(self, quad_name = 'hummingbird', configuration = '+') -> None:
+    def __init__(self, quad_name = 'hummingbird', configuration = '+', Drag_D = np.zeros((3, 3)), Drag_kh = 0) -> None:
 
         this_path = os.path.dirname(os.path.realpath(__file__))
         params_file = os.path.join(this_path, '..', '..', 'config', quad_name + '.xacro')
@@ -25,8 +25,8 @@ class QuadrotorModel:
         
         self.kT = float(attrib["motor_constant"])
         self.kM = float(attrib['moment_constant'])
-        self.D = np.zeros((3, 3))
-        self.kh = 0
+        self.D = Drag_D
+        self.kh = Drag_kh
         self.A = 0
         self.B = 0
         self.Inertia = np.array([
@@ -82,20 +82,18 @@ class QuadrotorModel:
 
         # f_expl
         BodyRateHat = crossmat(BodyRate)
-        # Orientation = unit_quat(Orientation)
-        # RotationMat = quat_to_rotation_matrix(Orientation)
+        # Orientation = 
+        RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
         # xb = RotationMat[:, 0]
         # yb = RotationMat[:, 1]
         # zb = RotationMat[:, 2]
         # zb = zb / ca.norm_2(zb)
-        # vh = RotationMat.T @ v
-        # vh[2] = 0
+        vh = RotationMat.T @ v
+        vh[2] = 0
         # print(tempBodyRate)
         f_expl = ca.vertcat(
             v,
-            # -g * e3 + (temp_input[0] * zb - RotationMat @ (self.D @ RotationMat.T @ v - self.kh * vh.T @ vh * e3)) / self.mass,
-            # -g * e3 + (f_thrust - RotationMat @ (self.D @ RotationMat.T @ v - self.kh * vh.T @ vh * e3)) / self.mass,
-            v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g,
+            v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g - RotationMat @ (self.D @ RotationMat.T @ v - ca.vertcat(0, 0, self.kh * vh.T @ vh)) / self.mass,
             1 / 2 * skew_symmetric(BodyRate) @ Orientation,
             ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:])
         )
@@ -119,10 +117,9 @@ class QuadrotorModel:
 
 
         # state bounds
-        self.model.BodyratesX = 2 * np.pi
-        self.model.BodyratesY = 2 * np.pi
-        self.model.BodyratesZ = np.pi / 4 * 8
-
+        self.model.BodyratesX = np.pi * 4
+        self.model.BodyratesY = np.pi * 4
+        self.model.BodyratesZ = np.pi * 2
         # input bounds
         self.model.RotorSpeed_min = RotorSpeed_min
         self.model.RotorSpeed_max = RotorSpeed_max
