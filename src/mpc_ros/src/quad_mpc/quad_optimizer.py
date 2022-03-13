@@ -1,8 +1,7 @@
 import os, scipy.linalg
 import numpy as np
 import casadi as ca
-from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
-# from src.quad_mpc.quad_model import QuadrotorModel
+from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 
 class QuadrotorOptimizer:
     def __init__(self, Tf, N, quadrotorModel) -> None:
@@ -55,7 +54,8 @@ class QuadrotorOptimizer:
         # self.ocp.dims.np = np_
 
         # set cost
-        Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.05, np.ones(4) * 0.1, np.ones(3) * 0.01)))
+        Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.05, np.ones(4) * 0.1, np.ones(3) * 0.01)))
+        Q[-1,-1] *=  0.1
         # Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.00, np.ones(4) * 0.0, np.ones(3) * 0.00)))
         R = np.eye(nu) * 1 / model.RotorSpeed_max
  
@@ -100,9 +100,9 @@ class QuadrotorOptimizer:
         self.ocp.constraints.ubx = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
         self.ocp.constraints.idxbx = np.array(range(3)) + nx - 3
 
-        # self.ocp.constraints.lbx_e = np.array([])
-        # self.ocp.constraints.ubx_e = np.array([])
-        # self.ocp.constraints.idxbx_e = np.array([])
+        # self.ocp.constraints.lbx_e = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
+        # self.ocp.constraints.ubx_e = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
+        # self.ocp.constraints.idxbx_e = np.array(range(3)) + nx - 3
 
         # self.ocp.constraints.lsbx_e
         # self.ocp.constraints.idxbxe_0 = np.array([])

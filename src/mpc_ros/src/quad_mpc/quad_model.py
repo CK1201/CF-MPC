@@ -1,5 +1,4 @@
-import os, yaml
-from re import I
+import os
 import casadi as ca
 import numpy as np
 from src.utils.utils import *
@@ -14,7 +13,6 @@ class QuadrotorModel:
         attrib = parse_xacro_file(params_file)
 
         # quad.max_thrust = float(attrib["max_rot_velocity"]) ** 2 * float(attrib["motor_constant"])
-        # quad.c = float(attrib['moment_constant'])
         self.model = ca.types.SimpleNamespace()
         self.constraint = ca.types.SimpleNamespace()
         # params = ca.types.SimpleNamespace()
@@ -82,7 +80,6 @@ class QuadrotorModel:
 
         # f_expl
         BodyRateHat = crossmat(BodyRate)
-        # Orientation = 
         RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
         # xb = RotationMat[:, 0]
         # yb = RotationMat[:, 1]
@@ -117,9 +114,9 @@ class QuadrotorModel:
 
 
         # state bounds
-        self.model.BodyratesX = np.pi * 4
-        self.model.BodyratesY = np.pi * 4
-        self.model.BodyratesZ = np.pi * 2
+        self.model.BodyratesX = np.pi * 2
+        self.model.BodyratesY = np.pi * 2
+        self.model.BodyratesZ = np.pi * 0.5
         # input bounds
         self.model.RotorSpeed_min = RotorSpeed_min
         self.model.RotorSpeed_max = RotorSpeed_max
@@ -163,6 +160,6 @@ class QuadrotorModel:
     def f_br(self, x, u):
         rotMat = quat_to_rotation_matrix(np.array(x[2]))
         tao = np.dot(self.G, u.T ** 2)[1:]
-        # tao_d = -self.A.dot(rotMat.T).dot(np.array(x[1]).T) - self.B.dot(u.T)
+        tao_d = -self.A.dot(rotMat.T).dot(np.array(x[1]).T) - self.B.dot(u.T)
         # return np.dot(np.linalg.inv(self.Inertia), tao.T - np.dot(np.dot(crossmat(x[3]), self.Inertia), np.array(x[3]).T))
         return np.dot(np.linalg.inv(self.Inertia), tao.T - crossmat(x[3]).dot(self.Inertia).dot(np.array(x[3]).T))
