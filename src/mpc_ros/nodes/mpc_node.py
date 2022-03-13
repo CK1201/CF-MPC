@@ -3,6 +3,7 @@ import imp
 import rospy, std_msgs.msg, message_filters, os, yaml
 import pandas as pd
 import numpy as np
+import seaborn as sns
 from std_msgs.msg import Int16, Bool
 from nav_msgs.msg import Odometry
 from mav_msgs.msg import Actuators
@@ -43,7 +44,10 @@ class QuadMPC:
     def __init__(self, t_horizon = 1, N = 10) -> None:
         rospy.init_node("mpc_node")
         quad_name = rospy.get_param('~quad_name', default='hummingbird')
+        self.with_drag = rospy.get_param('~with_drag', default='false')
         self.expriment = rospy.get_param('~expriment', default='hover')
+        self.experiment_time = rospy.get_param('~experiment_time', default='35')
+        self.experiment_times = rospy.get_param('~experiment_times', default='1')
         self.start_point = np.zeros(3)
         self.hover_point = np.zeros(3)
         self.start_point[0] = rospy.get_param('~start_x', default='0')
@@ -56,9 +60,10 @@ class QuadMPC:
         self.havenot_fit_param = rospy.get_param('~fit_param', default='true')
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps'
-        self.experiment_time = 35
-        self.experiment_times = 10
-        self.record_time = self.experiment_time + 5
+        if self.havenot_fit_param:
+            self.experiment_time = 40
+            self.experiment_times = 1
+            self.record_time = self.experiment_time + 10
         self.pose_error_num = 0
         self.a_data = None
 
@@ -67,16 +72,17 @@ class QuadMPC:
         self.have_reach_start_point_cmd = False
         self.trigger = False
         self.reach_start_point = False
-        self.start_record_fit_data = True
+        # self.start_record_fit_data = True
         self.start_record = False
-        # self.reach_last = False
         self.finish_tracking = False
         
         # load Drag coefficient
         dir_path = os.path.dirname(os.path.realpath(__file__))
         config_dir = dir_path + '/../config'
+        result_dir = dir_path + '/../result'
+        self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
         self.yaml_file = os.path.join(config_dir, quad_name + '.yaml')
-        if self.havenot_fit_param:
+        if self.havenot_fit_param or not(self.with_drag):
             Drag_D = np.zeros((3, 3))
             Drag_kh = 0
         else:
@@ -85,13 +91,12 @@ class QuadMPC:
                     config = yaml.load(file)
                     Drag_D = np.diag([config["D_dx"], config["D_dy"], config["D_dz"]])
                     Drag_kh = config["kh"]
+                    self.result_file = os.path.join(result_dir, self.expriment + '_with_drag.txt')
             except FileNotFoundError:
                 warn_msg = "Tried to load Drag coefficient but the file was not found. Using default Drag coefficient."
                 rospy.logwarn(warn_msg)
                 Drag_D = np.zeros((3, 3))
                 Drag_kh = 0
-        Drag_D = np.zeros((3, 3))
-        Drag_kh = 0
         print(Drag_D)
         # load model
         self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh))
@@ -163,7 +168,8 @@ class QuadMPC:
                 # x_sim = self.Simulation(self.x_data, self.motor_data, self.t_data - self.begin_time)
                 # draw_data_sim(self.x_data, x_sim, self.motor_data, self.t_data - self.begin_time)
                 rospy.sleep(3.0)
-                if self.max_motor_speed[self.experiment_times_current] > 830:
+                if self.pose_error_max[self.experiment_times_current] > 2:
+                    self.pose_error[self.experiment_times_current] = 0
                     self.pose_error_max[self.experiment_times_current] = 0
                     self.pose_error_mean[self.experiment_times_current] = 0
                     self.max_v_w[self.experiment_times_current] = 0
@@ -171,43 +177,47 @@ class QuadMPC:
                     self.experiment_times_current -= 1
                 self.experiment_times_current += 1
                 self.finish_tracking = False
+
                 if (self.experiment_times_current < self.experiment_times):
                     self.trigger = True
                     self.begin_time = rospy.Time.now().to_sec()
-                    # self.start_record_time = rospy.Time.now().to_sec()
                 else:
                     print("max error : ", self.pose_error_max)
                     print("mean error: ", self.pose_error_mean)
                     print("max v_w   : ", self.max_v_w)
                     print("max motor : ", self.max_motor_speed)
-                    
 
-                    fig=plt.figure()
-                    ax1=fig.add_subplot(2,2,1)
-                    # ax1.set_title("pose_error_max")
-                    ax1.boxplot([self.pose_error_max], labels=['pose_error_max'], showmeans=True)
-                    ax1.grid()
+                    if not(self.havenot_fit_param):
+                        np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_mean[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:]), axis=0), fmt='%0.8f', delimiter=',')
+                        
+                        fig=plt.figure()
+                        ax1=fig.add_subplot(2,2,1)
+                        # ax1.set_title("pose_error_max")
+                        ax1.boxplot([self.pose_error_max], labels=['pose_error_max'], showmeans=True)
+                        ax1.set_ylabel("m")
+                        ax1.grid()
 
-                    ax2=fig.add_subplot(2,2,2)
-                    # ax2.set_title("pose_error_mean")
-                    ax2.boxplot([self.pose_error_mean], labels=['pose_error_mean'], showmeans=True)
-                    ax2.grid()
+                        ax2=fig.add_subplot(2,2,2)
+                        # ax2.set_title("pose_error_mean")
+                        ax2.boxplot([self.pose_error_mean], labels=['pose_error_mean'], showmeans=True)
+                        ax2.set_ylabel("m")
+                        ax2.grid()
 
-                    ax3=fig.add_subplot(2,2,3)
-                    # ax3.set_title("max_motor_speed_percent")
-                    ax3.boxplot([self.max_motor_speed / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max], labels=['max_motor_speed_percent'], showmeans=True)
-                    ax3.grid()
+                        ax3=fig.add_subplot(2,2,3)
+                        # ax3.set_title("max_motor_speed_percent")
+                        ax3.boxplot([self.max_motor_speed / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max], labels=['max_motor_speed_percent'], showmeans=True)
+                        ax3.grid()
 
-                    ax4=fig.add_subplot(2,2,4)
-                    # ax4.set_title("max_v_w")
-                    ax4.boxplot([self.max_v_w], labels=['max_v_w'], showmeans=True)
-                    ax4.grid()
+                        ax4=fig.add_subplot(2,2,4)
+                        # ax4.set_title("max_v_w")
+                        ax4.boxplot([self.max_v_w], labels=['max_v_w'], showmeans=True)
+                        ax4.set_ylabel("m/s")
+                        ax4.grid()
 
-                    plt.show()
+                        plt.show()
 
                 # return
             if self.havenot_fit_param and self.start_record:
-                print("Rest of the time to record data: ", self.record_time - (rospy.Time.now().to_sec() - self.start_record_time))
                 if (rospy.Time.now().to_sec() - self.start_record_time) >= self.record_time:
                     drag_coefficient = np.squeeze(self.fitParam(self.x_data, self.a_data, self.motor_data)).tolist()
                     print(drag_coefficient)
@@ -289,11 +299,14 @@ class QuadMPC:
                 else:
                     return
             if (self.ap_state == AutopilotFeedback().HOVER):
-                self.reach_start_point = True
-                self.begin_time = rospy.Time.now().to_sec()
-                self.start_record = True
-                self.have_reach_start_point_cmd = False
-                print("arrive start point")
+                self.reach_times += 1
+                if self.reach_times > 50:
+                    self.reach_times = 0
+                    self.reach_start_point = True
+                    self.begin_time = rospy.Time.now().to_sec()
+                    self.start_record = True
+                    self.have_reach_start_point_cmd = False
+                    print("arrive start point")
             return
         elif (not self.finish_tracking):
             p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, model=self.quadrotorOptimizer.quadrotorModel, plot=False)

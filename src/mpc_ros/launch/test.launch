@@ -1,6 +1,11 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-
+    <arg name="with_drag" default="true"/>
+    <arg name="fit_param" default="false"/>
+    <arg name="experiment_time" default="38"/>
+    <arg name="experiment_times" default="4"/>
+    <arg name="plot" default="false"/>
+    
     <arg name="expriment" default="circle_speedup"/>
     <arg name="start_x" default="5"/>
     <arg name="start_y" default="0"/>
@@ -15,12 +20,6 @@
     <arg name="hover_y" default="0"/>
     <arg name="hover_z" default="10"/>
 
-
-
-
-    <arg name="plot" default="false"/>
-    <arg name="fit_param" default="false"/>
-
     <!-- circle
     circle_speedup
     hover 
@@ -32,7 +31,10 @@
 
     <node pkg="mpc_ros" type="mpc_node.py" name="mpc_node" output="screen">
         <param name="quad_name" value="$(arg mav_name)"/>
+        <param name="with_drag" value="$(arg with_drag)"/>
         <param name="expriment" value="$(arg expriment)"/>
+        <param name="experiment_time" value="$(arg experiment_time)"/>
+        <param name="experiment_times" value="$(arg experiment_times)"/>
         <param name="hover_x" value="$(arg hover_x)"/>
         <param name="hover_y" value="$(arg hover_y)"/>
         <param name="hover_z" value="$(arg hover_z)"/>
