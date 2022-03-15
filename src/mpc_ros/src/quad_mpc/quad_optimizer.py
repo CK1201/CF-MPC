@@ -21,7 +21,7 @@ class QuadrotorOptimizer:
         acModel.x = model.x
         acModel.xdot = model.xdot
         acModel.u = model.u
-        # acModel.p = model.p
+        acModel.p = model.p
         # acModel.z = model.z
         acModel.f_expl_expr = model.f_expl_expr
         acModel.f_impl_expr = model.f_impl_expr
@@ -35,8 +35,7 @@ class QuadrotorOptimizer:
         nu = acModel.u.size()[0]
         ny = nx + nu
         ny_e = nx
-        # np_ = acModel.p.size()[0]
-        # print(nx)
+        np_ = acModel.p.size()[0]
 
         # nsbx = 0
         # nh = constraint.expr.shape[0]
@@ -51,43 +50,46 @@ class QuadrotorOptimizer:
         self.ocp.dims.nbx_0 = nx
         self.ocp.dims.nbx_e = nx
         # self.ocp.dims.nh = nh
-        # self.ocp.dims.np = np_
-
+        self.ocp.dims.np = np_
+        self.ocp.parameter_values = np.array([0])
         # set cost
-        Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.05, np.ones(4) * 0.1, np.ones(3) * 0.01)))
-        Q[-1,-1] *=  0.1
+        Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
+        # Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
+        # Q[-1,-1] *=  0.1
         # Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.00, np.ones(4) * 0.0, np.ones(3) * 0.00)))
         R = np.eye(nu) * 1 / model.RotorSpeed_max
  
-        self.ocp.cost.cost_type = "LINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
-        self.ocp.cost.cost_type_e = "LINEAR_LS"
+        # self.ocp.cost.cost_type_0 = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
+        self.ocp.cost.cost_type = "NONLINEAR_LS"
+        self.ocp.cost.cost_type_e = "NONLINEAR_LS"
 
-        self.ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
-        self.ocp.model.cost_y_expr_e = ca.vertcat(model.x)
+        # self.ocp.model.cost_y_expr_0 = ca.vertcat(model.x, acModel.p, model.u)
+        self.ocp.model.cost_y_expr = ca.vertcat(acModel.x, acModel.p, acModel.u)
+        self.ocp.model.cost_y_expr_e = ca.vertcat(acModel.x, acModel.p)
 
         # self.ocp.cost.W_0 = scipy.linalg.block_diag(Q, R)
-        self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
-        self.ocp.cost.W_e = Q
-        # print(ocp.cost.W)
+        self.ocp.cost.W = scipy.linalg.block_diag(Q, np.zeros((np_, np_)), R)
+        self.ocp.cost.W_e = scipy.linalg.block_diag(Q, np.zeros((np_, np_)))
+        # print(self.ocp.cost.W)
 
-        Vx = np.zeros((ny, nx))
-        Vx[:nx, :nx] = np.eye(nx)
-        self.ocp.cost.Vx = Vx
+        # Vx = np.zeros((ny, nx))
+        # Vx[:nx, :nx] = np.eye(nx)
+        # self.ocp.cost.Vx = Vx
 
-        Vu = np.zeros((ny, nu))
-        Vu[-nu:, -nu:] = np.eye(nu)
-        self.ocp.cost.Vu = Vu
+        # Vu = np.zeros((ny, nu))
+        # Vu[-nu:, -nu:] = np.eye(nu)
+        # self.ocp.cost.Vu = Vu
 
-        Vx_e = np.zeros((ny_e, nx))
-        Vx_e[:nx, :nx] = np.eye(nx)
-        self.ocp.cost.Vx_e = Vx_e
+        # Vx_e = np.zeros((ny_e, nx))
+        # Vx_e[:nx, :nx] = np.eye(nx)
+        # self.ocp.cost.Vx_e = Vx_e
 
         # set intial condition
         self.ocp.constraints.x0 = model.x0
 
         # set intial references
-        self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(nu)))
-        self.ocp.cost.yref_e = model.x0
+        self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(np_), np.zeros(nu)))
+        self.ocp.cost.yref_e = np.concatenate((model.x0, np.zeros(np_)))
 
         # setting constraints
         # state constraints
@@ -97,8 +99,16 @@ class QuadrotorOptimizer:
 
         # bodyrate constraint
         self.ocp.constraints.lbx = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
-        self.ocp.constraints.ubx = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
+        self.ocp.constraints.ubx = np.array([model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
         self.ocp.constraints.idxbx = np.array(range(3)) + nx - 3
+
+        # self.ocp.constraints.lbx = np.array([0, -model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
+        # self.ocp.constraints.ubx = np.array([99999, model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
+        # self.ocp.constraints.idxbx = np.concatenate((np.array([2]), np.array(range(3)) + nx - 3))
+        # temp = np.array(range(4))
+        # temp[0] = 2
+        # temp[1:] = temp[1:] + nx - 3
+        # self.ocp.constraints.idxbx = temp
 
         # self.ocp.constraints.lbx_e = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
         # self.ocp.constraints.ubx_e = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])

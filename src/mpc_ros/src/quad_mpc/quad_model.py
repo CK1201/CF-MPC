@@ -76,9 +76,10 @@ class QuadrotorModel:
         # z = ca.vertcat([])
 
         # parameters
-        # p = ca.vertcat([])
+        p = ca.SX.sym("param", 1, 1)
 
         # f_expl
+        # Orientation = ca.fabs(Orientation)
         BodyRateHat = crossmat(BodyRate)
         RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
         # xb = RotationMat[:, 0]
@@ -102,7 +103,7 @@ class QuadrotorModel:
         self.model.x = x
         self.model.xdot = xdot
         self.model.u = RotorSpeed
-        # self.model.p = p
+        self.model.p = p
         # self.model.z = z
         self.model.f_expl_expr = f_expl
         self.model.f_impl_expr = xdot - f_expl
