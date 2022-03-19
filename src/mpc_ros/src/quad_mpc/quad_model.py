@@ -4,7 +4,7 @@ import numpy as np
 from src.utils.utils import *
 
 class QuadrotorModel:
-    def __init__(self, quad_name = 'hummingbird', configuration = '+', Drag_D = np.zeros((3, 3)), Drag_kh = 0) -> None:
+    def __init__(self, quad_name = 'hummingbird', configuration = '+', Drag_D = np.zeros((3, 3)), Drag_kh = 0, Drag_A = np.zeros((3, 3)), Drag_B = np.zeros((3, 3))) -> None:
 
         this_path = os.path.dirname(os.path.realpath(__file__))
         params_file = os.path.join(this_path, '..', '..', 'config', quad_name + '.xacro')
@@ -25,8 +25,8 @@ class QuadrotorModel:
         self.kM = float(attrib['moment_constant'])
         self.D = Drag_D
         self.kh = Drag_kh
-        self.A = 0
-        self.B = 0
+        self.A = Drag_A
+        self.B = Drag_B
         self.Inertia = np.array([
             [float(attrib['body_inertia'][0]['ixx']), float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['ixz'])],
             [float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['iyy']), float(attrib['body_inertia'][0]['iyz'])],
@@ -88,12 +88,13 @@ class QuadrotorModel:
         # zb = zb / ca.norm_2(zb)
         vh = RotationMat.T @ v
         vh[2] = 0
+        tao_d = - self.A @ RotationMat.T @ v - self.B @ BodyRate
         # print(tempBodyRate)
         f_expl = ca.vertcat(
             v,
             v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g - RotationMat @ (self.D @ RotationMat.T @ v - ca.vertcat(0, 0, self.kh * vh.T @ vh)) / self.mass,
             1 / 2 * skew_symmetric(BodyRate) @ Orientation,
-            ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:])
+            ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:] + tao_d)
         )
         
         # con_h
@@ -163,4 +164,4 @@ class QuadrotorModel:
         tao = np.dot(self.G, u.T ** 2)[1:]
         tao_d = -self.A.dot(rotMat.T).dot(np.array(x[1]).T) - self.B.dot(u.T)
         # return np.dot(np.linalg.inv(self.Inertia), tao.T - np.dot(np.dot(crossmat(x[3]), self.Inertia), np.array(x[3]).T))
-        return np.dot(np.linalg.inv(self.Inertia), tao.T - crossmat(x[3]).dot(self.Inertia).dot(np.array(x[3]).T))
+        return np.dot(np.linalg.inv(self.Inertia), tao.T + tao_d.T - crossmat(x[3]).dot(self.Inertia).dot(np.array(x[3]).T))

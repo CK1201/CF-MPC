@@ -60,36 +60,50 @@ class QuadrotorOptimizer:
         R = np.eye(nu) * 1 / model.RotorSpeed_max
  
         # self.ocp.cost.cost_type_0 = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
-        self.ocp.cost.cost_type = "NONLINEAR_LS"
-        self.ocp.cost.cost_type_e = "NONLINEAR_LS"
+        self.ocp.cost.cost_type = "LINEAR_LS"
+        self.ocp.cost.cost_type_e = "LINEAR_LS"
 
-        # self.ocp.model.cost_y_expr_0 = ca.vertcat(model.x, acModel.p, model.u)
-        self.ocp.model.cost_y_expr = ca.vertcat(acModel.x, acModel.p, acModel.u)
-        self.ocp.model.cost_y_expr_e = ca.vertcat(acModel.x, acModel.p)
+        if self.ocp.cost.cost_type == "LINEAR_LS":
+            self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
+            self.ocp.cost.W_e = scipy.linalg.block_diag(Q)
 
-        # self.ocp.cost.W_0 = scipy.linalg.block_diag(Q, R)
-        self.ocp.cost.W = scipy.linalg.block_diag(Q, np.zeros((np_, np_)), R)
-        self.ocp.cost.W_e = scipy.linalg.block_diag(Q, np.zeros((np_, np_)))
+            self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(nu)))
+            self.ocp.cost.yref_e = model.x0
+
+            Vx = np.zeros((ny, nx))
+            Vx[:nx, :nx] = np.eye(nx)
+            self.ocp.cost.Vx = Vx
+
+            Vu = np.zeros((ny, nu))
+            Vu[-nu:, -nu:] = np.eye(nu)
+            self.ocp.cost.Vu = Vu
+
+            Vx_e = np.zeros((ny_e, nx))
+            Vx_e[:nx, :nx] = np.eye(nx)
+            self.ocp.cost.Vx_e = Vx_e
+
+
+        elif self.ocp.cost.cost_type == "NONLINEAR_LS":
+
+            # self.ocp.model.cost_y_expr_0 = ca.vertcat(model.x, acModel.p, model.u)
+            self.ocp.model.cost_y_expr = ca.vertcat(acModel.x, acModel.p, acModel.u)
+            self.ocp.model.cost_y_expr_e = ca.vertcat(acModel.x, acModel.p)
+
+            # self.ocp.cost.W_0 = scipy.linalg.block_diag(Q, R)
+            self.ocp.cost.W = scipy.linalg.block_diag(Q, np.zeros((np_, np_)), R)
+            self.ocp.cost.W_e = scipy.linalg.block_diag(Q, np.zeros((np_, np_)))
+
+            self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(np_), np.zeros(nu)))
+            self.ocp.cost.yref_e = np.concatenate((model.x0, np.zeros(np_)))
         # print(self.ocp.cost.W)
 
-        # Vx = np.zeros((ny, nx))
-        # Vx[:nx, :nx] = np.eye(nx)
-        # self.ocp.cost.Vx = Vx
 
-        # Vu = np.zeros((ny, nu))
-        # Vu[-nu:, -nu:] = np.eye(nu)
-        # self.ocp.cost.Vu = Vu
-
-        # Vx_e = np.zeros((ny_e, nx))
-        # Vx_e[:nx, :nx] = np.eye(nx)
-        # self.ocp.cost.Vx_e = Vx_e
 
         # set intial condition
         self.ocp.constraints.x0 = model.x0
 
         # set intial references
-        self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(np_), np.zeros(nu)))
-        self.ocp.cost.yref_e = np.concatenate((model.x0, np.zeros(np_)))
+
 
         # setting constraints
         # state constraints

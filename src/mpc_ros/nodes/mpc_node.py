@@ -83,24 +83,30 @@ class QuadMPC:
         result_dir = dir_path + '/../result'
         self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
         self.yaml_file = os.path.join(config_dir, quad_name + '.yaml')
+        Drag_A = np.zeros((3, 3))
         if self.havenot_fit_param or not(self.with_drag):
             Drag_D = np.zeros((3, 3))
             Drag_kh = 0
+            Drag_B = np.zeros((3, 3))
         else:
             try:
                 with open(self.yaml_file) as file:
                     config = yaml.load(file)
                     Drag_D = np.diag([config["D_dx"], config["D_dy"], config["D_dz"]])
                     Drag_kh = config["kh"]
+                    Drag_A[0, 1] = config["D_ax"]
+                    Drag_A[1, 0] = config["D_ay"]
+                    Drag_B = np.diag([config["D_bx"], config["D_by"], config["D_bz"]])
                     self.result_file = os.path.join(result_dir, self.expriment + '_with_drag.txt')
             except FileNotFoundError:
                 warn_msg = "Tried to load Drag coefficient but the file was not found. Using default Drag coefficient."
                 rospy.logwarn(warn_msg)
                 Drag_D = np.zeros((3, 3))
                 Drag_kh = 0
+                Drag_B = np.zeros((3, 3))
         print(Drag_D)
         # load model
-        self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh))
+        self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh, Drag_A=Drag_A, Drag_B=Drag_B))
         # Subscribers
         self.odom_sub = rospy.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry, self.odom_callback)
         self.trigger_sub = rospy.Subscriber('/' + quad_name + '/trigger', std_msgs.msg.Empty, self.trigger_callback)
@@ -221,7 +227,7 @@ class QuadMPC:
                 # return
             if self.havenot_fit_param and self.start_record:
                 if (rospy.Time.now().to_sec() - self.start_record_time) >= self.record_time:
-                    drag_coefficient = np.squeeze(self.fitParam(self.x_data, self.a_data, self.motor_data)).tolist()
+                    drag_coefficient = np.squeeze(self.fitParam(self.x_data, self.a_data, self.motor_data, self.t_data)).tolist()
                     print(drag_coefficient)
 
                     with open(self.yaml_file) as file:
@@ -230,6 +236,11 @@ class QuadMPC:
                     config.update({'D_dy': drag_coefficient[1]})
                     config.update({'D_dz': drag_coefficient[2]})
                     config.update({'kh': drag_coefficient[3]})
+                    config.update({'D_ax': drag_coefficient[4]})
+                    config.update({'D_ay': drag_coefficient[5]})
+                    config.update({'D_bx': drag_coefficient[6]})
+                    config.update({'D_by': drag_coefficient[7]})
+                    config.update({'D_bz': drag_coefficient[8]})
                     with open(self.yaml_file, 'w') as file:
                         file.write(yaml.dump(config, default_flow_style=False))
                     return
@@ -248,7 +259,6 @@ class QuadMPC:
     def trigger_callback(self, msg):
         self.trigger = True
         self.begin_time = rospy.Time.now().to_sec()
-        self.start_record_time = rospy.Time.now().to_sec()
         self.experiment_times_current = 0
         self.pose_error = np.zeros(self.experiment_times)
         self.pose_error_max = np.zeros(self.experiment_times)
@@ -277,7 +287,7 @@ class QuadMPC:
             self.a_data[0] = np.array(a_w)
             self.motor_data = np.zeros((1, 4))
             self.motor_data[0] = motor_msg.angular_velocities
-            self.t_data = np.array([motor_msg.header.stamp.to_sec()])
+            self.t_data = np.array([odom_msg.header.stamp.to_sec()])
         else:
             self.x_data = np.concatenate((self.x_data, np.concatenate((p, v_w, q, w))[np.newaxis,:]), axis=0)
             self.a_data = np.concatenate((self.a_data, np.array(a_w)[np.newaxis,:]), axis=0)
@@ -307,6 +317,7 @@ class QuadMPC:
                     self.reach_start_point = True
                     self.begin_time = rospy.Time.now().to_sec()
                     self.start_record = True
+                    self.start_record_time = rospy.Time.now().to_sec()
                     self.have_reach_start_point_cmd = False
                     print("arrive start point")
             return
@@ -366,12 +377,17 @@ class QuadMPC:
             # if i != 0:
             #     self.quadrotorOptimizer.acados_solver.constraints_set(i, "lbx", lbx)
             #     self.quadrotorOptimizer.acados_solver.constraints_set(i, "ubx", ubx)
-            xref = np.concatenate((p[i], v[i], q[i], br[i], np.zeros(1)))
+            xref = np.concatenate((p[i], v[i], q[i], br[i]))
+            if self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
+                xref = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.ocp.dims.np)))
+
             # self.quadrotorOptimizer.acados_solver.set(i, 'x', xref)
             self.quadrotorOptimizer.acados_solver.set(i, 'yref', np.concatenate((xref, u[i])))
             self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
             # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
-        xref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N], np.zeros(1)))
+        xref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N]))
+        if self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
+                xref = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.ocp.dims.np)))
         # self.quadrotorOptimizer.acados_solver.set(self.N, 'x', xref)
         self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
         # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
@@ -679,21 +695,29 @@ class QuadMPC:
             x_sim[i + 1] = np.concatenate((model.Simulation(x_sim[i, :3], x_sim[i, 3:6], x_sim[i, 6:10], x_data[i, 10:], np.abs(motor_data[i]), t[i + 1] - t[i])))
         return x_sim
 
-    def fitParam(self, x_data, a_data, motor_data):
+    def fitParam(self, x_data, a_data, motor_data, t_data):
         self.havenot_fit_param = False
         kT = self.quadrotorOptimizer.quadrotorModel.kT
         mass = self.quadrotorOptimizer.quadrotorModel.mass
         # g = self.quadrotorOptimizer.quadrotorModel.g[2]
         b_drag = np.zeros((3 * len(x_data), 1))
         A_drag = np.zeros((3 * len(x_data), 4))
+        d_drag = np.zeros((3 * len(x_data), 1))
+        C_drag = np.zeros((3 * len(x_data), 5))
+        brDotset = np.gradient(x_data[:, 10:13], t_data, axis=0)
+        Inertia = self.quadrotorOptimizer.quadrotorModel.Inertia
         for i in range(len(x_data)):
             # p = x_data[i, :3]
             v = x_data[i, 3:6]
             a = a_data[i]
             # a[2] += g
             q = x_data[i, 6:10]
-            # br = x_data[i, 10:13]
-            f_thrust = kT * motor_data[i].dot(motor_data[i])
+            br = x_data[i, 10:13]
+            brDot = brDotset[i, :]
+            temp_input = self.quadrotorOptimizer.quadrotorModel.G.dot(motor_data[i] ** 2)
+            # f_thrust = kT * motor_data[i].dot(motor_data[i])
+            f_thrust = temp_input[0]
+            torque = temp_input[1:]
             rotMat = quat_to_rotation_matrix(q)
             vh = rotMat.T.dot(v.T)
             vh[2] = 0
@@ -706,7 +730,13 @@ class QuadMPC:
             A_drag[i * 3: i * 3 + 3, 2] = rotMat[:,2].dot(v) * rotMat[:,2]
             A_drag[i * 3: i * 3 + 3, 3] = vh.dot(vh) * rotMat[:,2]
             b_drag[i * 3: i * 3 + 3, 0] = f_thrust * rotMat[:,2] - mass * a
-        return np.linalg.inv(np.dot(A_drag.T, A_drag)).dot(A_drag.T).dot(b_drag)
+
+            C_drag[i * 3, 0] = -rotMat[:,1].dot(v)
+            C_drag[i * 3 + 1, 1] = -rotMat[:,0].dot(v)
+            C_drag[i * 3: i * 3 + 3, 2:] = -np.diag(br)
+            d_drag[i * 3: i * 3 + 3, 0] = Inertia.dot(brDot.T) + crossmat(br).dot(Inertia).dot(br.T) - torque
+
+        return np.concatenate((np.linalg.inv(np.dot(A_drag.T, A_drag)).dot(A_drag.T).dot(b_drag), np.linalg.inv(np.dot(C_drag.T, C_drag)).dot(C_drag.T).dot(d_drag)))
 
     def shutdown_node(self):
         print("closed")
