@@ -38,7 +38,7 @@
 
   <!-- RotorS stuff to spawn the quadrotor !-->
   <group ns="$(arg mav_name)">
-    <include file="$(find rotors_gazebo)/launch/spawn_mav.launch">
+    <include file="$(find mpc_ros)/launch/spawn_mav.launch">
       <arg name="mav_name" value="$(arg mav_name)" />
       <arg name="model" value="$(arg model)" />
       <arg name="enable_logging" value="$(arg enable_logging)" />
@@ -135,14 +135,15 @@
       </group>
     </group>
 
-    <!-- <node pkg="joy" type="joy_node" name="joy_node">
+    <node pkg="joy" type="joy_node" name="joy_node">
       <param name="autorepeat_rate" value="10"/>
     </node>
 
     <node pkg="manual_flight_assistant" type="manual_flight_assistant" 
         name="manual_flight_assistant" output="screen">
       <rosparam file="$(find rpg_rotors_interface)/parameters/manual_flight_assistant.yaml"/>
-    </node> -->
+    </node>
+
 
   </group> 
 

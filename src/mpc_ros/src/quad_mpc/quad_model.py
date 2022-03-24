@@ -7,7 +7,7 @@ class QuadrotorModel:
     def __init__(self, quad_name = 'hummingbird', configuration = '+', Drag_D = np.zeros((3, 3)), Drag_kh = 0, Drag_A = np.zeros((3, 3)), Drag_B = np.zeros((3, 3))) -> None:
 
         this_path = os.path.dirname(os.path.realpath(__file__))
-        params_file = os.path.join(this_path, '..', '..', 'config', quad_name + '.xacro')
+        params_file = os.path.join(this_path, '..', '..', 'xacro', quad_name + '.xacro')
 
         # Get parameters for drone
         attrib = parse_xacro_file(params_file)

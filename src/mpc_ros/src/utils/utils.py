@@ -134,6 +134,8 @@ def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdot
     Ginv = np.linalg.inv(model.G)
     Inertia = model.Inertia
     d = model.D
+    Drad_A = model.A
+    Drad_B = model.B
     dx, dy, dz = d[0, 0], d[1, 1], d[2, 2]
     kh = model.kh
     for i in range(N_reference):
@@ -190,7 +192,8 @@ def getReference_Quaternion_Bodyrates_RotorSpeed(v, a, j, s, yaw, yawdot, yawdot
 
         # u
         # tao = np.dot(Inertia, brdot[i].T) + np.dot(np.cross(br[i], Inertia), br[i].T)
-        tao = np.dot(Inertia, brdot[i].T) + np.dot(np.dot(crossmat(br[i]), Inertia), br[i].T)
+        tao_d = -Drad_A.dot(rotation_mat.T.dot(v[i].T)) - Drad_B.dot(br[i].T)
+        tao = np.dot(Inertia, brdot[i].T) + np.dot(np.dot(crossmat(br[i]), Inertia), br[i].T) - tao_d
         # print(tao)
         u[i] = np.sqrt(np.dot(Ginv, np.array([thrust[i], tao[0], tao[1], tao[2]]).T))
 

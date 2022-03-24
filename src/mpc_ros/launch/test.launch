@@ -50,4 +50,6 @@
         <param name="plot" value="$(arg plot)"/>
         <param name="fit_param" value="$(arg fit_param)"/>
     </node>
+
+    
 </launch>

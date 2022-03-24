@@ -3,8 +3,9 @@
   <arg name="quad_name" default="hummingbird"/>
 
   <arg name="mav_name" default="$(arg quad_name)"/>
-  <arg name="model" value="$(find rotors_description)/urdf/mav_generic_odometry_sensor.gazebo"/>
+  <arg name="model" value="$(find mpc_ros)/xacro/mav_generic_odometry_sensor.gazebo"/>
   <arg name="world_name" default="$(find rotors_gazebo)/worlds/basic.world"/>
+  <arg name="sensor_name" default="camera"/>
 
   <arg name="x_init" default="0"/>
   <arg name="y_init" default="0"/>
@@ -44,4 +45,33 @@
     <arg name="z_init" value="$(arg z_init)"/>
   </include>
 
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mpc_ros)/rviz/common.rviz" required="true" />
+
+  <arg name="d435i_cam_depth_to_left_ir_offset" default="0.0"/>
+  <arg name="d435i_cam_depth_to_right_ir_offset" default="-0.050"/>
+  <arg name="d435i_cam_depth_to_color_offset" default="0.015"/>
+  <arg name="d435i_cam_width" default="0.090"/>
+  <arg name="d435i_cam_height" default="0.025"/>
+  <arg name="d435i_cam_depth" default="0.02505"/>
+  <arg name="d435i_cam_mass" default="1e-16"/>
+  <arg name="d435i_cam_mount_from_center_offset" default="0.0149"/>
+  <arg name="d435i_cam_depth_px" default="${d435i_cam_mount_from_center_offset}"/>
+  <arg name="d435i_cam_depth_py" default="0.0175"/>
+  <arg name="d435i_cam_depth_pz" default="${d435i_cam_height/2}"/>
+
+
+  <!-- <node pkg="tf" type="static_transform_publisher" name="depth2depth_optical" args="0.17 0 -0.05 -1.57 0 -1.57 $(arg quad_name)/base_link $(arg sensor_name)_depth_optical_frame 100"/> -->
+
+  <node pkg="tf" type="static_transform_publisher" name="world2map" args="0 0 0 0 0 0 world map 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="base2cam" args="0.17 0 -0.05 0 0 0 $(arg quad_name)/base_link $(arg sensor_name)_link 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="cam2depth" args="0 0 0 0 0 0 $(arg sensor_name)_link $(arg sensor_name)_depth_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="depth2depth_optical" args="0 0 0 -1.57 0 -1.57 $(arg sensor_name)_depth_frame $(arg sensor_name)_depth_optical_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="depth2left_ir" args="0 ${d435i_cam_depth_to_left_ir_offset} 0 0 0 0 $(arg sensor_name)_depth_frame $(arg sensor_name)_left_ir_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="left_ir2left_ir_optical" args="0 0 0 -1.57 0 -1.57 $(arg sensor_name)_left_ir_frame $(arg sensor_name)_left_ir_optical_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="depth2_right_ir" args="0 ${d435i_cam_depth_to_right_ir_offset} 0 0 0 0 $(arg sensor_name)_depth_frame $(arg sensor_name)_right_ir_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="right_ir2right_ir_optical" args="0 0 0 -1.57 0 -1.57 $(arg sensor_name)_right_ir_frame $(arg sensor_name)_right_ir_optical_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="depth2color" args="0 ${d435i_cam_depth_to_color_offset} 0 0 0 0 $(arg sensor_name)_depth_frame $(arg sensor_name)_color_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="color2color_optical" args="0 0 0 -1.57 0 -1.57 $(arg sensor_name)_color_frame $(arg sensor_name)_color_optical_frame 10"/>
+
+  
 </launch>
