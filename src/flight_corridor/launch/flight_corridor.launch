@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="flight_corridor" type="flight_corridor_node" name="flight_corridor_node" output="screen">
+    </node>
+
+
+</launch>

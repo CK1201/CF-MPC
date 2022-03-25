@@ -43,6 +43,9 @@
     <arg name="x_init" value="$(arg x_init)"/>
     <arg name="y_init" value="$(arg y_init)"/>
     <arg name="z_init" value="$(arg z_init)"/>
+  </include> 
+
+  <include file="$(find mpc_ros)/launch/octomap.launch">
   </include>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mpc_ros)/rviz/common.rviz" required="true" />

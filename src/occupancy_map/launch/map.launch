@@ -1,6 +1,0 @@
-<launch>
-    <node pkg="costmap" type="costmap_node" name="costmap_node" output="screen">
-    </node>
-
-
-</launch>

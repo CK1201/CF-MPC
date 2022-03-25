@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>occupancy_map</name>
+  <name>flight_corridor</name>
   <version>0.0.0</version>
-  <description>The occupancy_map package</description>
+  <description>The flight_corridor package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/occupancy_map</url> -->
+  <!-- <url type="website">http://wiki.ros.org/flight_corridor</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
@@ -87,6 +87,9 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf</exec_depend>
 
+
+  <build_depend>octomap</build_depend>
+  <exec_depend>octomap</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

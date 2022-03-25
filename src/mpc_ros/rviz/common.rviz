@@ -54,8 +54,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: -0.007500242441892624
-        Min Value: -0.01230078749358654
+        Max Value: 2.141838312149048
+        Min Value: -0.008149147033691406
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -63,7 +63,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: AxisColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -78,7 +78,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Angle Tolerance: 0.10000000149011612
       Class: rviz/Odometry
       Covariance:
@@ -120,16 +120,6 @@ Visualization Manager:
       Radius: 0.10000000149011612
       Reference Frame: <Fixed Frame>
       Value: true
-    - Alpha: 0.699999988079071
-      Class: rviz/Map
-      Color Scheme: map
-      Draw Behind: false
-      Enabled: false
-      Name: Map
-      Topic: /projected_map
-      Unreliable: false
-      Use Timestamp: false
-      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -158,17 +148,39 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Alpha: 0.699999988079071
-      Class: octomap_rviz_plugin/OccupancyMap
-      Color Scheme: map
-      Draw Behind: false
+    - Class: octomap_rviz_plugin/OccupancyGrid
       Enabled: true
+      Max. Height Display: 3.4028234663852886e+38
       Max. Octree Depth: 16
-      Name: OccupancyMap
-      Octomap Binary Topic: ""
-      Unreliable: false
-      Use Timestamp: false
+      Min. Height Display: -3.4028234663852886e+38
+      Name: OccupancyGrid
+      Octomap Topic: /octomap_full
+      Queue Size: 5
       Value: true
+      Voxel Alpha: 1
+      Voxel Coloring: Z-Axis
+      Voxel Rendering: Occupied Voxels
+    - Alpha: 0.5
+      Class: decomp_rviz_plugins/EllipsoidArray
+      Color: 204; 51; 204
+      Enabled: true
+      Name: EllipsoidArray
+      Topic: ""
+      Unreliable: false
+      Value: true
+    - Alpha: 0.20000000298023224
+      BoundColor: 255; 0; 0
+      Class: decomp_rviz_plugins/PolyhedronArray
+      Enabled: true
+      MeshColor: 0; 170; 255
+      Name: PolyhedronArray
+      Scale: 0.10000000149011612
+      State: Mesh
+      Topic: ""
+      Unreliable: false
+      Value: true
+      VsColor: 0; 255; 0
+      VsScale: 1
   Enabled: true
   Global Options:
     Background Color: 238; 238; 236
@@ -197,7 +209,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 18.79564666748047
+      Distance: 38.087955474853516
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -212,10 +224,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5747972726821899
+      Pitch: 0.5347974896430969
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.25860595703125
+      Yaw: 3.1285946369171143
     Saved: ~
 Window Geometry:
   Displays:

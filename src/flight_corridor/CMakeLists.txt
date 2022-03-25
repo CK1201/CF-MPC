@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(occupancy_map)
+project(flight_corridor)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++14)
@@ -27,6 +27,7 @@ find_package(catkin REQUIRED COMPONENTS
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
+find_package(octomap REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -131,8 +132,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
   ${PCL_INCLUDE_DIRS}
+  ${OCTOMAP_INCLUDE_DIRS}
 )
-
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/costmap.cpp
@@ -149,8 +150,8 @@ include_directories(
 # add_executable(${PROJECT_NAME}_node src/costmap_node.cpp)
 
 add_executable(${PROJECT_NAME}_node 
-  src/occupancymap_node.cpp
-  src/occupancymap.cpp
+  src/flight_corridor_node.cpp
+  src/flight_corridor.cpp
 )
 
 ## Rename C++ executable without prefix
@@ -167,6 +168,7 @@ add_executable(${PROJECT_NAME}_node
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
 )
 
 #############
