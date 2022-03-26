@@ -14,6 +14,7 @@ from std_srvs.srv import Empty
 from src.utils.utils import *
 from src.quad_mpc.quad_optimizer import QuadrotorOptimizer
 from src.quad_mpc.quad_model import QuadrotorModel
+from decomp_ros_msgs.msg import PolyhedronArray
 
 '''
 RotorS
@@ -112,6 +113,8 @@ class QuadMPC:
         self.trigger_sub = rospy.Subscriber('/' + quad_name + '/trigger', std_msgs.msg.Empty, self.trigger_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
+        self.PolyhedronArray_sub = rospy.Subscriber('/flight_corridor_node/polyhedron_array', PolyhedronArray, self.PolyhedronArray_callback)
+        
         # message filter
         self.imu_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/imu', Imu)
         self.odom_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry)
@@ -271,6 +274,13 @@ class QuadMPC:
     def ap_fb_callback(self, msg):
         self.have_ap_fb = True
         self.ap_state =  msg.autopilot_state
+
+    def PolyhedronArray_callback(self, msg):
+        self.PolyhedronArray = msg
+        print(len(self.PolyhedronArray.polyhedrons))
+        print(self.PolyhedronArray.polyhedrons[0].points[0])
+        print(self.PolyhedronArray.polyhedrons[0].normals[0])
+        print()
 
     def TimeSynchronizer_callback(self, imu_msg, odom_msg, motor_msg):
         if not(self.start_record):

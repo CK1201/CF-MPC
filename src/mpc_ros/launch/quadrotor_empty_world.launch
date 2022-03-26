@@ -4,7 +4,8 @@
 
   <arg name="mav_name" default="$(arg quad_name)"/>
   <arg name="model" value="$(find mpc_ros)/xacro/mav_generic_odometry_sensor.gazebo"/>
-  <arg name="world_name" default="$(find rotors_gazebo)/worlds/basic.world"/>
+  <!-- <arg name="world_name" default="$(find rotors_gazebo)/worlds/basic.world"/> -->
+  <arg name="world_name" default="$(find mpc_ros)/worlds/simple.world"/>
   <arg name="sensor_name" default="camera"/>
 
   <arg name="x_init" default="0"/>

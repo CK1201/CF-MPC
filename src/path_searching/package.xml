@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>flight_corridor</name>
+  <name>path_searching</name>
   <version>0.0.0</version>
-  <description>The flight_corridor package</description>
+  <description>The path_searching package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
   <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
-  <maintainer email="ck1201@todo.todo">ck1201</maintainer>
+  <maintainer email="iszhouxin@zju.edu.cn">iszhouxin</maintainer>
 
 
   <!-- One license tag required, multiple allowed, one license per tag -->
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/flight_corridor</url> -->
+  <!-- <url type="website">http://wiki.ros.org/path_searching</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
@@ -49,55 +49,19 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>mavros_msgs</build_depend>
-  <build_depend>message_generation</build_depend>
-  <build_depend>nav_msgs</build_depend>
-  <build_depend>pcl_conversions</build_depend>
-  <build_depend>pcl_msgs</build_depend>
-  <build_depend>pcl_ros</build_depend>
-  <build_depend>quadrotor_msgs</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
-  <build_depend>sensor_msgs</build_depend>
   <build_depend>std_msgs</build_depend>
-  <build_depend>tf</build_depend>
-  <build_export_depend>geometry_msgs</build_export_depend>
-  <build_export_depend>mavros_msgs</build_export_depend>
-  <build_export_depend>nav_msgs</build_export_depend>
-  <build_export_depend>pcl_conversions</build_export_depend>
-  <build_export_depend>pcl_msgs</build_export_depend>
-  <build_export_depend>pcl_ros</build_export_depend>
-  <build_export_depend>quadrotor_msgs</build_export_depend>
+  <build_depend>plan_env</build_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
-  <build_export_depend>sensor_msgs</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
-  <build_export_depend>tf</build_export_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>mavros_msgs</exec_depend>
-  <exec_depend>message_generation</exec_depend>
-  <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>pcl_conversions</exec_depend>
-  <exec_depend>pcl_msgs</exec_depend>
-  <exec_depend>pcl_ros</exec_depend>
-  <exec_depend>quadrotor_msgs</exec_depend>
+  <build_export_depend>plan_env</build_export_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>rospy</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>tf</exec_depend>
-
-
-  <build_depend>octomap</build_depend>
-  <exec_depend>octomap</exec_depend>
-
-  <build_depend>plan_env</build_depend>
   <exec_depend>plan_env</exec_depend>
 
-  <build_depend>path_searching</build_depend>
-  <exec_depend>path_searching</exec_depend>
-  
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
