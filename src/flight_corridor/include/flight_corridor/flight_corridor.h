@@ -22,9 +22,9 @@
 #include <decomp_ros_utils/data_ros_utils.h>
 #include <decomp_util/ellipsoid_decomp.h>
 
-#include <plan_env/grid_map.h>
+#include <grid_map/grid_map.h>
 
-#include <path_searching/dyn_a_star.h>
+// #include <path_searching/dyn_a_star.h>
 
 using namespace std;
 using namespace Eigen;
@@ -41,8 +41,10 @@ namespace flight_corridor
         nav_msgs::Odometry QuadOdom_;
         octomap::OcTree* OctoMap_;
         EllipsoidDecomp3D decomp_util;
+        // MappingParameters MapParam_;
+        // MappingData MapData_;
         GridMap::Ptr GridMap_;
-        AStar::Ptr AStar_;
+        // AStar::Ptr AStar_;
 
         /* ROS utils */
         ros::Timer ExecTimer_;
@@ -57,13 +59,18 @@ namespace flight_corridor
         void OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
 
         /* Other functions */
-        vec_Vec3f getPath();
+        vec_Vec3f getPath(Eigen::Vector3d goal);
+        std::vector<Eigen::Vector3i> AStar(Eigen::Vector3d Start, Eigen::Vector3d Goal);
 
     public:
         FLIGHTCORRIDOR(/* args */){}
         ~FLIGHTCORRIDOR(){}
         void init(ros::NodeHandle &nh);
+
+
     };
+
+
 
 }
 

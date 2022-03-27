@@ -8,8 +8,8 @@ namespace flight_corridor
 
         GridMap_.reset(new GridMap);
         GridMap_->initMap(nh);
-        AStar_.reset(new AStar);
-        AStar_->initGridMap(GridMap_, Eigen::Vector3i(100, 100, 100));
+        // AStar_.reset(new AStar);
+        // AStar_->initGridMap(GridMap_, Eigen::Vector3i(100, 100, 100));
 
         ExecTimer_ = nh.createTimer(ros::Duration(0.1), &FLIGHTCORRIDOR::execSFCCallback, this);
 
@@ -30,8 +30,8 @@ namespace flight_corridor
     void FLIGHTCORRIDOR::execSFCCallback(const ros::TimerEvent &e){
         if (!HaveOdom_ || !HaveMap_)
             return;
-
-        Path_ = FLIGHTCORRIDOR::getPath();
+        Eigen::Vector3d goal(10, 0, 3);
+        Path_ = FLIGHTCORRIDOR::getPath(goal);
 
         decomp_util.dilate(Path_);
 
@@ -58,9 +58,9 @@ namespace flight_corridor
         if(!HaveOdom_)
             return;
         PointCloudRaw_ = *msg;
-        sensor_msgs::PointCloud cloud;
-        bool success = sensor_msgs::convertPointCloud2ToPointCloud(PointCloudRaw_, cloud);
-        cloud.header.frame_id = "map";
+        // sensor_msgs::PointCloud cloud;
+        // bool success = sensor_msgs::convertPointCloud2ToPointCloud(PointCloudRaw_, cloud);
+        // cloud.header.frame_id = "map";
         // PointCloudPub_.publish(cloud);
         
         // sensor_msgs::PointCloud2 msg2;
@@ -81,23 +81,46 @@ namespace flight_corridor
         sensor_msgs::convertPointCloud2ToPointCloud(OctoMapCenter_, ObstaclePointCloud_);
         Obstacle_ = DecompROS::cloud_to_vec(ObstaclePointCloud_);
         decomp_util.set_obs(Obstacle_);
-        
+        // FLIGHTCORRIDOR::updateGradMap();
 
         // pcl::PointCloud<pcl::PointXYZ> PCLcloud;
         // pcl::fromROSMsg(OctoMapCenter_, PCLcloud);
     }
 
-    vec_Vec3f FLIGHTCORRIDOR::getPath(){
-        vec_Vec3f path;
-        Eigen::Matrix<double, 3, 1> start, goal, temp;
-        start << QuadOdom_.pose.pose.position.x, QuadOdom_.pose.pose.position.y, QuadOdom_.pose.pose.position.z;
-        goal << 10, 0, 2;
-        path.push_back(start);
-        temp << 4.9, 0, 2.6;
-        path.push_back(temp);
-        temp << 5.2, 0, 2.6;
-        path.push_back(temp);
-        path.push_back(goal);
-        return path;
+    vec_Vec3f FLIGHTCORRIDOR::getPath(Eigen::Vector3d goal){
+        Eigen::Vector3d start(QuadOdom_.pose.pose.position.x, QuadOdom_.pose.pose.position.y, QuadOdom_.pose.pose.position.z);
+        std::vector<Eigen::Vector3i> PathID = this->AStar(start, goal);
+        // auto PathID = this->JPS(start, goal);
+
+        vec_Vec3f Path;
+        Eigen::Matrix<double, 3, 1> temp;
+        Eigen::Vector3d tempPos;
+        for (unsigned int i = 0; i < PathID.size(); i++){
+            GridMap_->indexToPos(PathID[i], tempPos);
+            temp << tempPos[0], tempPos[1], tempPos[2];
+            Path.push_back(temp);
+        }
+            
+        return Path;
+    }
+
+    std::vector<Eigen::Vector3i> FLIGHTCORRIDOR::AStar(Eigen::Vector3d Start, Eigen::Vector3d Goal){
+        Eigen::Vector3i StartID, GoalID, tempID;
+        Eigen::Vector3d tempPos;
+        GridMap_->posToIndex(Start, StartID);
+        GridMap_->posToIndex(Goal, GoalID);
+
+        std::vector<Eigen::Vector3i> PathID;
+        PathID.push_back(StartID);
+
+        tempPos << 4.9, 0, 2.6;
+        GridMap_->posToIndex(tempPos, tempID);
+        PathID.push_back(tempID);
+        tempPos << 5.2, 0, 2.6;
+        GridMap_->posToIndex(tempPos, tempID);
+        PathID.push_back(tempID);
+
+        PathID.push_back(GoalID);
+        return PathID;
     }
 }

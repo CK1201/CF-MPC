@@ -2,11 +2,9 @@ cmake_minimum_required(VERSION 3.0.2)
 project(flight_corridor)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
+add_compile_options(-std=c++14)
 set(CMAKE_BUILD_TYPE "Release")
-# set(CMAKE_EXPORT_COMPILE_COMMANDS "Yes")
-
-ADD_COMPILE_OPTIONS(-std=c++11)
-ADD_COMPILE_OPTIONS(-std=c++14)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -25,8 +23,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   tf
-  plan_env
-  path_searching
+  cv_bridge
+  grid_map
 )
 
 ## System dependencies are found with CMake's conventions
@@ -123,7 +121,7 @@ find_package(octomap REQUIRED)
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES flight_corridor
- CATKIN_DEPENDS geometry_msgs mavros_msgs message_generation nav_msgs pcl_conversions pcl_msgs pcl_ros quadrotor_msgs roscpp rospy sensor_msgs std_msgs tf plan_env path_searching
+ CATKIN_DEPENDS geometry_msgs mavros_msgs message_generation nav_msgs pcl_conversions pcl_msgs pcl_ros quadrotor_msgs roscpp rospy sensor_msgs std_msgs tf grid_map
 #  DEPENDS system_lib
 )
 

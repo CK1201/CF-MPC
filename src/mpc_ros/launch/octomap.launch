@@ -1,11 +1,15 @@
 <launch>
+  <arg name="cotomap/resolution" default="0.1"/>
+  <arg name="cotomap/pointcloud_min_z" default="-0.1"/>
+  <arg name="cotomap/pointcloud_max_z" default="30.0"/>
+
   <node pkg="octomap_server" type="octomap_server_node" name="octomap_server">
     <!-- name of the fixed frame, needs to be "/map" for SLAM, default: /map -->
     <!-- 静态全局地图的 frame_id，但在增量式构建地图时，需要提供输入的点云帧和静态全局帧之间的 TF 变换 -->
     <param name = "frame_id" type = "string" value = "/map" />
 
     <!-- resolution in meters per pixel, default: 0.05 -->
-    <param name = "resolution" value = "0.1" />
+    <param name = "resolution" value = "$(arg cotomap/resolution)" />
 
     <!-- The robot's base frame in which ground plane detection is performed (if enabled), default: base_footprint -->
     <param name = "base_frame_id" type = "string" value = "/hummingbird/base_link" />
@@ -28,8 +32,8 @@
 	  <!-- <param name = "ground_filter/plane_distance" type = "double" value = "0.3" /> -->
 
     <!-- max/min height for occupancy map, should be in meters, default: -/+ infinity -->
-    <param name = "pointcloud_max_z" type = "double" value = "100.0" />
-    <param name = "pointcloud_min_z" type = "double" value = "-1.0" />
+    <param name = "pointcloud_max_z" value = "$(arg cotomap/pointcloud_max_z)" />
+    <param name = "pointcloud_min_z" value = "$(arg cotomap/pointcloud_min_z)" />
 
     <!-- Minimum and maximum height of occupied cells to be consider in the final map. This ignores all occupied voxels outside of the interval when sending out visualizations and collision maps, but will not affect the actual octomap representation, default: -/+ infinity -->
     <!-- <param name = "occupancy_max_z" type = "double" value = "100.0" /> -->
