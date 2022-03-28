@@ -32,6 +32,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 find_package(octomap REQUIRED)
+find_package(jps3d REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -138,6 +139,7 @@ include_directories(
   ${EIGEN3_INCLUDE_DIR}
   ${PCL_INCLUDE_DIRS}
   ${OCTOMAP_INCLUDE_DIRS}
+  ${JPS3D_INCLUDE_DIRS}
 )
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -174,6 +176,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
+  ${JPS3D_LIBRARIES}
 )
 
 #############

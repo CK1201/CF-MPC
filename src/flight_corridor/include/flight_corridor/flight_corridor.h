@@ -24,7 +24,8 @@
 
 #include <grid_map/grid_map.h>
 
-// #include <path_searching/dyn_a_star.h>
+#include <jps_basis/data_utils.h>
+#include <jps_planner/jps_planner/jps_planner.h>
 
 using namespace std;
 using namespace Eigen;
@@ -41,11 +42,12 @@ namespace flight_corridor
         nav_msgs::Odometry QuadOdom_;
         octomap::OcTree* OctoMap_;
         EllipsoidDecomp3D decomp_util;
-        // MappingParameters MapParam_;
-        // MappingData MapData_;
-        GridMap::Ptr GridMap_;
-        // AStar::Ptr AStar_;
 
+        GridMap::Ptr GridMap_;
+        GridNodePtr *** GridNodeMap_;
+        
+        // JPSPlanner3D Planner_(false);
+        
         /* ROS utils */
         ros::Timer ExecTimer_;
         ros::Subscriber OdomSub_, PointCloudRawSub_, OctoMapSub_, OctoMapCenterSub_;
@@ -60,7 +62,10 @@ namespace flight_corridor
 
         /* Other functions */
         vec_Vec3f getPath(Eigen::Vector3d goal);
-        std::vector<Eigen::Vector3i> AStar(Eigen::Vector3d Start, Eigen::Vector3d Goal);
+        vec_Vec3f JPSPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
+        std::vector<Eigen::Vector3i> AStarPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
+        double getHeu(GridNodePtr node1, GridNodePtr node2);
+        void AstarGetSucc(GridNodePtr currentPtr, vector<GridNodePtr> &neighborPtrSets, vector<double> &edgeCostSets);
 
     public:
         FLIGHTCORRIDOR(/* args */){}

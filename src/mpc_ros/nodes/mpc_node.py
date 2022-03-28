@@ -276,11 +276,36 @@ class QuadMPC:
         self.ap_state =  msg.autopilot_state
 
     def PolyhedronArray_callback(self, msg):
+        if not(self.have_odom):
+            return
         self.PolyhedronArray = msg
-        print(len(self.PolyhedronArray.polyhedrons))
-        print(self.PolyhedronArray.polyhedrons[0].points[0])
-        print(self.PolyhedronArray.polyhedrons[0].normals[0])
-        print()
+        # select = 0
+        # for i in range(len(self.PolyhedronArray.polyhedrons) - 1):
+        #     inside = True
+        #     for j in range(len(self.PolyhedronArray.polyhedrons[i + 1].points)):
+        #         temp = self.PolyhedronArray.polyhedrons[i + 1].points[j]
+        #         point = np.array([temp.x, temp.y, temp.z])
+        #         temp = self.PolyhedronArray.polyhedrons[i + 1].normals[j]
+        #         normal = np.array([temp.x, temp.y, temp.z])
+        #         b = normal.dot(point)
+        #         print(normal.dot(np.array(self.p)))
+        #         print(b)
+        #         if normal.dot(np.array(self.p)) > b:
+        #             inside = False
+        #             break
+        #     if inside == False:
+        #         break
+        #     else:
+        #         select = i + 1
+        # selectedPolyhedron = self.PolyhedronArray.polyhedrons[select]
+        # print(type(self.PolyhedronArray.polyhedrons[0].points[0]))
+        # print(self.PolyhedronArray.polyhedrons[0].points[0])
+        # print("polyhedron size: ",len(self.PolyhedronArray.polyhedrons))
+        # print("select polyhedron: ",select + 1)
+        # print("polyhedron size: ", len(selectedPolyhedron.points))
+        # print(selectedPolyhedron.points[0])
+        # print(selectedPolyhedron.normals[0])
+        # print()
 
     def TimeSynchronizer_callback(self, imu_msg, odom_msg, motor_msg):
         if not(self.start_record):
@@ -379,6 +404,36 @@ class QuadMPC:
         if self.a_data is not(None):
             desire_motor.angles = np.array([error_pose, error_vel, max_motor_speed_now, self.max_motor_speed[self.experiment_times_current], vw_abs, self.a_data[-1, 0], self.a_data[-1, 1], self.a_data[-1, 2] - 9.81, self.v_w[0], self.v_w[1], self.v_w[2]])
         self.desire_motor_pub.publish(desire_motor)
+
+        # select polyhedron
+        select = 0
+        for i in range(len(self.PolyhedronArray.polyhedrons) - 1):
+            inside = True
+            for j in range(len(self.PolyhedronArray.polyhedrons[i + 1].points)):
+                temp = self.PolyhedronArray.polyhedrons[i + 1].points[j]
+                point = np.array([temp.x, temp.y, temp.z])
+                temp = self.PolyhedronArray.polyhedrons[i + 1].normals[j]
+                normal = np.array([temp.x, temp.y, temp.z])
+                b = normal.dot(point)
+                print(normal.dot(np.array(self.p)))
+                print(b)
+                if normal.dot(np.array(self.p)) > b:
+                    inside = False
+                    break
+            if inside == False:
+                break
+            else:
+                select = i + 1
+        selectedPolyhedron = self.PolyhedronArray.polyhedrons[select]
+        # print(type(self.PolyhedronArray.polyhedrons[0].points[0]))
+        # print(self.PolyhedronArray.polyhedrons[0].points[0])
+        # print("polyhedron size: ",len(self.PolyhedronArray.polyhedrons))
+        # print("select polyhedron: ",select + 1)
+        # print("polyhedron size: ", len(selectedPolyhedron.points))
+        # print(selectedPolyhedron.points[0])
+        # print(selectedPolyhedron.normals[0])
+        # print()
+        
 
         ubx = np.array([11, np.pi * 2, np.pi * 2, np.pi * 1])
         lbx = np.array([0, -np.pi * 2, -np.pi * 2, -np.pi * 1])

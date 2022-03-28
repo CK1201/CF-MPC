@@ -25,6 +25,36 @@
 
 using namespace std;
 
+#define inf 1>>20
+struct GridNode;
+typedef GridNode* GridNodePtr;
+struct GridNode
+{     
+    int id;        // 1--> open set, -1 --> closed set
+    Eigen::Vector3d coord; 
+    Eigen::Vector3i dir;   // direction of expanding
+    Eigen::Vector3i index;
+
+    double gScore, fScore, hScore;
+    GridNodePtr cameFrom;
+    std::multimap<double, GridNodePtr>::iterator nodeMapIt;
+
+    GridNode(Eigen::Vector3i _index, Eigen::Vector3d _coord){  
+        id = 0;
+        index = _index;
+        coord = _coord;
+        dir   = Eigen::Vector3i::Zero();
+
+        gScore = inf;
+        fScore = inf;
+        hScore = inf;
+        cameFrom = NULL;
+    }
+
+    GridNode(){};
+    ~GridNode(){};
+};
+
 // voxel hashing
 template <typename T>
 struct matrix_hash : std::unary_function<T, size_t> {
@@ -183,11 +213,13 @@ public:
 
   typedef std::shared_ptr<GridMap> Ptr;
 
+  MappingParameters mp_;
+  MappingData md_;
+
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 private:
-  MappingParameters mp_;
-  MappingData md_;
+  
   octomap::OcTree* OctoMap_;
 
   // get depth image and camera pose

@@ -2,8 +2,11 @@
  * @file data_utils.h
  * @brief Provide a few widely used function for basic type
  */
-#ifndef DATA_UTILS_H
-#define DATA_UTILS_H
+// #ifndef DATA_UTILS_H
+// #define DATA_UTILS_H
+
+#ifndef JPS_DATA_UTIL_H
+#define JPS_DATA_UTIL_H
 
 #include <decomp_basis/data_type.h>
 
