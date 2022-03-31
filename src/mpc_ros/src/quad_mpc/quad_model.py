@@ -19,6 +19,8 @@ class QuadrotorModel:
         self.configuration = configuration
         self.g = ca.vertcat(0, 0, 9.81) # gravity
         self.mass = float(attrib['mass']) + float(attrib['mass_rotor']) * 4
+        self.body_width = float(attrib['body_width'])
+        self.body_height = float(attrib['body_height'])
         self.arm_length = float(attrib['arm_length'])
         
         self.kT = float(attrib["motor_constant"])
@@ -60,6 +62,26 @@ class QuadrotorModel:
         BodyRate = ca.SX.sym("BodyRate", 3, 1)
         x = ca.vertcat(p, v, Orientation, BodyRate)
 
+        RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
+
+        boxVertexNp = np.array([[self.arm_length, 0, 0],
+                              [self.arm_length, 0, self.body_height],
+                              [-self.arm_length, 0, 0],
+                              [-self.arm_length, 0, self.body_height],
+                              [0, self.arm_length, 0],
+                              [0, self.arm_length, self.body_height],
+                              [0, -self.arm_length, 0],
+                              [0, -self.arm_length, self.body_height]])
+        self.model.boxVertex = ca.SX.zeros(3, 8)
+        # Rotation = ca.SX.sym("Rotation", 3, 3)
+        for i in range (len(boxVertexNp)):
+            self.model.boxVertex[:,i] = RotationMat @ boxVertexNp[i] + p
+        # self.boxVertex[0] = (ca.SX.sym("Rotation", 3, 3) @ self.boxVertex[0]).T
+        # print(Rotation)
+        # print(self.boxVertex)
+        # print(ca.SX.sym("Rotation", 3, 3))
+        # print((ca.SX.sym("Rotation", 3, 3) @ self.boxVertex[1]).size())
+
         # xdot
         pDot = ca.SX.sym("PDot", 3, 1)
         vDot = ca.SX.sym("VDot", 3, 1)
@@ -76,12 +98,14 @@ class QuadrotorModel:
         # z = ca.vertcat([])
 
         # parameters
-        p = ca.SX.sym("param", 1, 1)
-
+        self.model.MaxNumOfPolyhedrons = 10
+        param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
+        # print(param[4:6].T @ param[4:6])
+        # print(param[:3].T @ self.boxVertex[1].T)
         # f_expl
         # Orientation = ca.fabs(Orientation)
         BodyRateHat = crossmat(BodyRate)
-        RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
+        
         # xb = RotationMat[:, 0]
         # yb = RotationMat[:, 1]
         # zb = RotationMat[:, 2]
@@ -98,13 +122,19 @@ class QuadrotorModel:
         )
         
         # con_h
+        
+        # print(RotationMat @ boxVertex[0].T + p)
+        # con_h1 = bodyFrame + boxVertex
+        # RotationMat @ self.body_width @ self.body_height
+        # con_h = ca.vertcat([[RotationMat @ boxVertex[i].T + p] for i in range(len(boxVertex))])
+        # print(con_h)
         con_h = None
 
         self.model.name = quad_name
         self.model.x = x
         self.model.xdot = xdot
         self.model.u = RotorSpeed
-        self.model.p = p
+        self.model.p = param
         # self.model.z = z
         self.model.f_expl_expr = f_expl
         self.model.f_impl_expr = xdot - f_expl
@@ -113,7 +143,6 @@ class QuadrotorModel:
         self.model.x0 = np.concatenate((np.zeros(6), np.array([1, 0, 0, 0]), np.zeros(3)))
         # self.model.x0 = np.concatenate((np.zeros(6), flatten(np.eye(3)), np.zeros(3)),axis=0)
         # Model bounds
-
 
         # state bounds
         self.model.BodyratesX = np.pi * 2

@@ -207,6 +207,7 @@ void GridMap::OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg){
   Eigen::Vector3d p3d;
   pcl::PointCloud<pcl::PointXYZI>::Ptr occupied_nodes(new pcl::PointCloud<pcl::PointXYZI>());
   double time = ros::Time::now().toSec();
+  // ROS_INFO("process pointcloud");
   for(octomap::OcTree::leaf_iterator it = OctoMap_->begin_leafs(), end = OctoMap_->end_leafs();it != end; ++it){
     pcl::PointXYZI cube_center;
     cube_center.x = it.getX();
@@ -215,6 +216,7 @@ void GridMap::OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg){
     cube_center.intensity = it.getDepth();
 
     p3d(0) = cube_center.x, p3d(1) = cube_center.y, p3d(2) = cube_center.z;
+    // cout << p3d << endl;
     this->setOccupied(p3d);
     this->setOccupancy(p3d, 1);
   
@@ -954,8 +956,11 @@ void GridMap::publishMapInflate(bool all_info)
   pcl::PointXYZ pt;
   pcl::PointCloud<pcl::PointXYZ> cloud;
 
-  Eigen::Vector3i min_cut = md_.local_bound_min_;
-  Eigen::Vector3i max_cut = md_.local_bound_max_;
+  // Eigen::Vector3i min_cut = md_.local_bound_min_;
+  // Eigen::Vector3i max_cut = md_.local_bound_max_;
+
+  Eigen::Vector3i min_cut = Eigen::Vector3i::Zero();
+  Eigen::Vector3i max_cut = mp_.map_voxel_num_ - Eigen::Vector3i::Ones();
 
   if (all_info)
   {
@@ -982,6 +987,7 @@ void GridMap::publishMapInflate(bool all_info)
         pt.x = pos(0);
         pt.y = pos(1);
         pt.z = pos(2);
+        // cout << pt << endl;
         cloud.push_back(pt);
       }
 

@@ -36,6 +36,7 @@ namespace flight_corridor
     private:
         bool HaveOdom_, HaveMap_;
         /* parameters */
+        Eigen::Vector3d Goal_;
         vec_Vec3f Obstacle_, Path_;
         sensor_msgs::PointCloud ObstaclePointCloud_;
         sensor_msgs::PointCloud2 PointCloudRaw_, OctoMapCenter_;

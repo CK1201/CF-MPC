@@ -434,28 +434,50 @@ class QuadMPC:
         # print(selectedPolyhedron.normals[0])
         # print()
         
+        # self.quadrotorOptimizer.acados_solver.acados_ocp.constraints.
+        # self.quadrotorOptimizer.ocp.cost.set
 
-        ubx = np.array([11, np.pi * 2, np.pi * 2, np.pi * 1])
-        lbx = np.array([0, -np.pi * 2, -np.pi * 2, -np.pi * 1])
+        # ubx = np.array([11, np.pi * 2, np.pi * 2, np.pi * 1])
+        # lbx = np.array([0, -np.pi * 2, -np.pi * 2, -np.pi * 1])
         self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
         self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
-        for i in range(self.N):
-            # if i != 0:
-            #     self.quadrotorOptimizer.acados_solver.constraints_set(i, "lbx", lbx)
-            #     self.quadrotorOptimizer.acados_solver.constraints_set(i, "ubx", ubx)
-            xref = np.concatenate((p[i], v[i], q[i], br[i]))
-            if self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
-                xref = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.ocp.dims.np)))
 
-            # self.quadrotorOptimizer.acados_solver.set(i, 'x', xref)
-            self.quadrotorOptimizer.acados_solver.set(i, 'yref', np.concatenate((xref, u[i])))
-            self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
-            # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
+        paramPolyhedron = np.array([])
+        for i in range(self.quadrotorOptimizer.quadrotorModel.model.MaxNumOfPolyhedrons):
+            if i < len(selectedPolyhedron.points):
+                temp = selectedPolyhedron.points[i]
+                point = np.array([temp.x, temp.y, temp.z])
+                temp = selectedPolyhedron.normals[i]
+                normal = np.array([temp.x, temp.y, temp.z])
+                b = normal.dot(point)
+                paramPolyhedron = np.concatenate((paramPolyhedron, normal, np.array([b])))
+            else:
+                paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, 1, 0])))
+
+
+
+        for i in range(self.N):
+            yref = np.concatenate((p[i], v[i], q[i], br[i], u[i]))
+            if self.quadrotorOptimizer.ocp.cost.cost_type == "LINEAR_LS":
+                self.quadrotorOptimizer.acados_solver.set(i, 'yref', yref)
+                # self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
+            elif self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
+                self.quadrotorOptimizer.acados_solver.set(i, 'yref', yref)
+                # self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
+            elif self.quadrotorOptimizer.ocp.cost.cost_type == "EXTERNAL":
+                param = np.concatenate((yref, paramPolyhedron))
+                self.quadrotorOptimizer.acados_solver.set(i, 'p', param)
+
         xref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N]))
-        if self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
-                xref = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.ocp.dims.np)))
-        # self.quadrotorOptimizer.acados_solver.set(self.N, 'x', xref)
-        self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
+        if self.quadrotorOptimizer.ocp.cost.cost_type == "LINEAR_LS":
+            self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
+        elif self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
+            self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
+        elif self.quadrotorOptimizer.ocp.cost.cost_type == "EXTERNAL":
+            param = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.quadrotorModel.model.u.size()[0]), paramPolyhedron))
+            self.quadrotorOptimizer.acados_solver.set(self.N, 'p', param)
+
+        # self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
         # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
 
         time = rospy.Time.now().to_sec()

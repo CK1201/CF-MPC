@@ -1,3 +1,4 @@
+from math import radians
 import os, scipy.linalg
 import numpy as np
 import casadi as ca
@@ -51,7 +52,7 @@ class QuadrotorOptimizer:
         self.ocp.dims.nbx_e = nx
         # self.ocp.dims.nh = nh
         self.ocp.dims.np = np_
-        self.ocp.parameter_values = np.array([0])
+        self.ocp.parameter_values = np.zeros(np_)
         # set cost
         Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
         # Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
@@ -60,8 +61,8 @@ class QuadrotorOptimizer:
         R = np.eye(nu) * 1 / model.RotorSpeed_max
  
         # self.ocp.cost.cost_type_0 = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
-        self.ocp.cost.cost_type = "LINEAR_LS"
-        self.ocp.cost.cost_type_e = "LINEAR_LS"
+        self.ocp.cost.cost_type = "EXTERNAL"
+        self.ocp.cost.cost_type_e = "EXTERNAL"
 
         if self.ocp.cost.cost_type == "LINEAR_LS":
             self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
@@ -84,18 +85,29 @@ class QuadrotorOptimizer:
 
 
         elif self.ocp.cost.cost_type == "NONLINEAR_LS":
-
-            # self.ocp.model.cost_y_expr_0 = ca.vertcat(model.x, acModel.p, model.u)
-            self.ocp.model.cost_y_expr = ca.vertcat(acModel.x, acModel.p, acModel.u)
+            self.ocp.model.cost_y_expr = ca.vertcat(acModel.x, acModel.u)
             self.ocp.model.cost_y_expr_e = ca.vertcat(acModel.x, acModel.p)
 
-            # self.ocp.cost.W_0 = scipy.linalg.block_diag(Q, R)
-            self.ocp.cost.W = scipy.linalg.block_diag(Q, np.zeros((np_, np_)), R)
-            self.ocp.cost.W_e = scipy.linalg.block_diag(Q, np.zeros((np_, np_)))
+            self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
+            self.ocp.cost.W_e = scipy.linalg.block_diag(Q)
 
-            self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(np_), np.zeros(nu)))
-            self.ocp.cost.yref_e = np.concatenate((model.x0, np.zeros(np_)))
-        # print(self.ocp.cost.W)
+            self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(nu)))
+            self.ocp.cost.yref_e = np.concatenate((model.x0))
+
+
+        elif self.ocp.cost.cost_type == "EXTERNAL":
+            SafetyCost = 0
+            for i in range (model.MaxNumOfPolyhedrons):
+
+                APolyhedron = acModel.p[ny + i * 4: ny + i * 4 + 3]
+                bPolyhedron = acModel.p[ny + i * 4 + 3]
+                for j in range(model.boxVertex.size()[1]):
+                    SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
+                    # print(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
+                    # print(SafetyCost.size())
+            self.ocp.model.cost_expr_ext_cost = (ca.vertcat(acModel.x, acModel.u) - acModel.p[:ny]).T @ scipy.linalg.block_diag(Q, R) @ (ca.vertcat(acModel.x, acModel.u)  - acModel.p[:ny]) + SafetyCost * 0
+            self.ocp.model.cost_expr_ext_cost_e = (acModel.x - acModel.p[:nx]).T @ Q @ (acModel.x - acModel.p[:nx]) + SafetyCost * 0
+            # print(SafetyCost)
 
 
 
@@ -185,3 +197,7 @@ class QuadrotorOptimizer:
             os.remove(json_file)
         self.acados_solver = AcadosOcpSolver(self.ocp, json_file = json_file)
         # self.acados_integrator = AcadosSimSolver(self.ocp, json_file = json_file)
+
+    def LossFunction(self, x):
+        cost = ca.fmax(x, 0) ** 3
+        return cost

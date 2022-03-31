@@ -6,10 +6,10 @@
     <arg name="experiment_times" default="4"/>
     <arg name="plot" default="false"/>
     
-    <arg name="expriment" default="circle_speedup"/>
+    <!-- <arg name="expriment" default="circle_speedup"/>
     <arg name="start_x" default="5"/>
     <arg name="start_y" default="0"/>
-    <arg name="start_z" default="10"/>
+    <arg name="start_z" default="10"/> -->
 
     <!-- <arg name="expriment" default="circle_vertical"/>
     <arg name="start_x" default="5"/>
@@ -17,14 +17,14 @@
     <arg name="start_z" default="10"/> -->
     
 
-    <!-- <arg name="expriment" default="hover"/>
+    <arg name="expriment" default="hover"/>
     <arg name="start_x" default="0"/>
     <arg name="start_y" default="0"/>
-    <arg name="start_z" default="0.1"/> -->
+    <arg name="start_z" default="0.1"/>
     
-    <arg name="hover_x" default="0"/>
-    <arg name="hover_y" default="0"/>
-    <arg name="hover_z" default="10"/>
+    <arg name="hover_x" default="5"/>
+    <arg name="hover_y" default="5"/>
+    <arg name="hover_z" default="5"/>
 
     <!-- circle
     circle_speedup
@@ -32,8 +32,11 @@
     lemniscate
     lemniscate_speedup -->
 
-    <!-- <include file="$(find mpc_ros)/launch/quadrotor_empty_world.launch">
-    </include> -->
+    <include file="$(find flight_corridor)/launch/flight_corridor.launch">
+        <arg name="flight_corridor/goal_x" value="$(arg hover_x)"/>
+        <arg name="flight_corridor/goal_y" value="$(arg hover_y)"/>
+        <arg name="flight_corridor/goal_z" value="$(arg hover_z)"/>
+    </include>
 
     <node pkg="mpc_ros" type="mpc_node.py" name="mpc_node" output="screen">
         <param name="quad_name" value="$(arg mav_name)"/>

@@ -6,12 +6,16 @@ namespace flight_corridor
         HaveOdom_ = false;
         HaveMap_ = false;
 
+        nh.param("flight_corridor/goal_x", Goal_[0], 0.0); // 目标位置
+        nh.param("flight_corridor/goal_y", Goal_[1], 0.0);
+        nh.param("flight_corridor/goal_z", Goal_[2], 0.0);
+
         GridMap_.reset(new GridMap);
         GridMap_->initMap(nh);
         // AStar_.reset(new AStar);
         // AStar_->initGridMap(GridMap_, Eigen::Vector3i(100, 100, 100));
 
-        ExecTimer_ = nh.createTimer(ros::Duration(0.1), &FLIGHTCORRIDOR::execSFCCallback, this);
+        ExecTimer_ = nh.createTimer(ros::Duration(0.01), &FLIGHTCORRIDOR::execSFCCallback, this);
 
         OdomSub_ = nh.subscribe<nav_msgs::Odometry>("/hummingbird/ground_truth/odometry", 1, &FLIGHTCORRIDOR::QuadOdomCallback, this);
         // PointCloudRawSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/camera/depth/color/points", 1, &FLIGHTCORRIDOR::PointCloudCallback, this);
@@ -30,8 +34,8 @@ namespace flight_corridor
     void FLIGHTCORRIDOR::execSFCCallback(const ros::TimerEvent &e){
         if (!HaveOdom_ || !HaveMap_)
             return;
-        Eigen::Vector3d goal(10, 0, 3);
-        Path_ = FLIGHTCORRIDOR::getPath(goal);
+        
+        Path_ = FLIGHTCORRIDOR::getPath(Goal_);
 
         decomp_util.dilate(Path_);
 
