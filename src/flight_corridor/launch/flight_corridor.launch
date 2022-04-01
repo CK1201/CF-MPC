@@ -1,11 +1,11 @@
 <launch>
     <arg name="quad_name" default="hummingbird"/>
 
-    <arg name="flight_corridor/goal_x" default="0.1"/>
-    <arg name="flight_corridor/goal_y" default="0.1"/>
-    <arg name="flight_corridor/goal_z" default="0.1"/>
+    <arg name="flight_corridor/goal_x" default="10.1"/>
+    <arg name="flight_corridor/goal_y" default="0.5"/>
+    <arg name="flight_corridor/goal_z" default="0.5"/>
 
-    <arg name="grid_map/resolution" default="0.1"/>
+    <arg name="grid_map/resolution" default="0.05"/>
     <arg name="grid_map/map_size_x" default="30.0"/>
     <arg name="grid_map/map_size_y" default="30.0"/>
     <arg name="grid_map/map_size_z" default="15.0"/>
@@ -36,7 +36,7 @@
     <arg name="grid_map/min_ray_length" default="0.1"/>
     <arg name="grid_map/max_ray_length" default="4.5"/>
 
-    <!-- <arg name="grid_map/visualization_truncate_height" default="4.9"/> -->
+    <arg name="grid_map/visualization_truncate_height" default="14.9"/>
     <arg name="grid_map/virtual_ceil_height" default="15.0"/>
     <!-- <arg name="grid_map/virtual_ceil_yp" default="0.1"/> -->
     <!-- <arg name="grid_map/virtual_ceil_yn" default="0.1"/> -->
@@ -46,14 +46,15 @@
 
     <arg name="grid_map/frame_id" default="world"/>
     <arg name="grid_map/local_map_margin" default="0.1"/>
-    <arg name="grid_map/ground_height" default="-0.01"/>
+    <arg name="grid_map/ground_height" default="-0.1"/>
 
     <arg name="grid_map/odom_depth_timeout" default="0.1"/>
 
     <include file="$(find mpc_ros)/launch/octomap.launch">
         <arg name="cotomap/resolution" value="$(arg grid_map/resolution) * 0.5"/>
         <arg name="cotomap/pointcloud_min_z" value="$(arg grid_map/ground_height)"/>
-        <arg name="cotomap/pointcloud_max_z" value="$(arg grid_map/ground_height) + $(arg grid_map/map_size_z)"/>
+        <!-- <arg name="cotomap/pointcloud_max_z" value="$(arg grid_map/ground_height) + $(arg grid_map/map_size_z)"/> -->
+        <arg name="cotomap/pointcloud_max_z" value="$(arg grid_map/map_size_z)"/>
     </include>
 
     <node pkg="flight_corridor" type="flight_corridor_node" name="flight_corridor_node" output="screen">
@@ -92,8 +93,8 @@
         <param name="grid_map/min_ray_length" value="$(arg grid_map/min_ray_length)"/>
         <param name="grid_map/max_ray_length" value="$(arg grid_map/max_ray_length)"/>
 
+        <param name="grid_map/visualization_truncate_height" value="$(arg grid_map/visualization_truncate_height)"/>
         <!-- <param name="grid_map/visualization_truncate_height" value="$(arg grid_map/visualization_truncate_height)"/> -->
-        <param name="grid_map/visualization_truncate_height" value="$(arg grid_map/virtual_ceil_height) - 0.1"/>
         <param name="grid_map/virtual_ceil_height" value="$(arg grid_map/virtual_ceil_height)"/>
         <!-- <param name="grid_map/virtual_ceil_yp" default="0.1"/> -->
         <!-- <param name="grid_map/virtual_ceil_yn" default="0.1"/> -->

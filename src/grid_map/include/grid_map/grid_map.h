@@ -295,9 +295,8 @@ inline bool GridMap::isKnownFree(const Eigen::Vector3i& id) {
 inline bool GridMap::isKnownOccupied(const Eigen::Vector3i& id) {
   Eigen::Vector3i id1 = id;
   boundIndex(id1);
-  int adr = toAddress(id1);
 
-  return md_.occupancy_buffer_inflate_[adr] == 1;
+  return md_.occupancy_buffer_inflate_[toAddress(id1)] >= 1;
 }
 
 inline void GridMap::setOccupied(Eigen::Vector3d pos) {
@@ -305,9 +304,14 @@ inline void GridMap::setOccupied(Eigen::Vector3d pos) {
 
   Eigen::Vector3i id;
   posToIndex(pos, id);
-
-  md_.occupancy_buffer_inflate_[id(0) * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) +
-                                id(1) * mp_.map_voxel_num_(2) + id(2)] = 1;
+  // cout << pos << endl;
+  md_.occupancy_buffer_inflate_[toAddress(id)] = 1;
+  // md_.occupancy_buffer_inflate_[id(0) * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) +
+  //                               id(1) * mp_.map_voxel_num_(2) + id(2)] = 1;
+  // if (this->isKnownOccupied(id))
+  //   cout << "occupied" << endl;
+  // else
+  //   cout << "not occupied" << endl;
 }
 
 inline void GridMap::setOccupancy(Eigen::Vector3d pos, double occ) {
@@ -320,7 +324,7 @@ inline void GridMap::setOccupancy(Eigen::Vector3d pos, double occ) {
 
   Eigen::Vector3i id;
   posToIndex(pos, id);
-
+  // cout << pos << endl;
   md_.occupancy_buffer_[toAddress(id)] = occ;
 }
 

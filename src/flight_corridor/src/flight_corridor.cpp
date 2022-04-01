@@ -43,12 +43,10 @@ namespace flight_corridor
         PathMsg.header.frame_id = "map";
         PathPub_.publish(PathMsg);
 
-        // decomp_ros_msgs::EllipsoidArray EllipsoidMsg = DecompROS::ellipsoid_array_to_ros(decomp_util.get_ellipsoids());
-        // EllipsoidMsg.header.frame_id = "map";
-        // EllipsoidPub_.publish(EllipsoidMsg);
+        
 
         auto Polyhedrons = decomp_util.get_polyhedrons();
-        for(int i = 0; i < Polyhedrons.size() - 1; i++) {
+        for(unsigned char i = 0; i < Polyhedrons.size() - 1; i++) {
             auto pt_inside = (Path_[i] + Path_[i+1]) / 2;
             for (unsigned int j = 0; j < Polyhedrons[i].hyperplanes().size(); j++) {
                 auto n = Polyhedrons[i].hyperplanes()[j].n_;
@@ -61,6 +59,10 @@ namespace flight_corridor
         decomp_ros_msgs::PolyhedronArray PolyhedronMsg = DecompROS::polyhedron_array_to_ros(Polyhedrons);
         PolyhedronMsg.header.frame_id = "map";
         PolyhedronPub_.publish(PolyhedronMsg);
+
+        decomp_ros_msgs::EllipsoidArray EllipsoidMsg = DecompROS::ellipsoid_array_to_ros(decomp_util.get_ellipsoids());
+        EllipsoidMsg.header.frame_id = "map";
+        EllipsoidPub_.publish(EllipsoidMsg);
     }
 
     void FLIGHTCORRIDOR::QuadOdomCallback(const nav_msgs::Odometry::ConstPtr &msg){
@@ -103,9 +105,8 @@ namespace flight_corridor
 
     vec_Vec3f FLIGHTCORRIDOR::getPath(Eigen::Vector3d goal){
         Eigen::Vector3d start(QuadOdom_.pose.pose.position.x, QuadOdom_.pose.pose.position.y, QuadOdom_.pose.pose.position.z);
-        // std::vector<Eigen::Vector3i> PathID = this->AStarPlan(start, goal);
-        
 
+        // std::vector<Eigen::Vector3i> PathID = this->AStarPlan(start, goal);
         // vec_Vec3f Path;
         // Eigen::Matrix<double, 3, 1> temp;
         // Eigen::Vector3d tempPos;
@@ -114,8 +115,8 @@ namespace flight_corridor
         //     temp << tempPos[0], tempPos[1], tempPos[2];
         //     Path.push_back(temp);
         // }
-            
-        return this->JPSPlan(start, goal);;
+        auto Path = this->JPSPlan(start, goal);
+        return Path;
     }
 
     vec_Vec3f FLIGHTCORRIDOR::JPSPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal){
@@ -129,6 +130,7 @@ namespace flight_corridor
         GridMap_->getRegion(ori, size);
         Eigen::Matrix<double, 3, 1> ori1(ori);
         Eigen::Matrix<int, 3, 1> size1(GridMap_->mp_.map_voxel_num_);
+        // cout << size << endl;
         std::shared_ptr<JPS::VoxelMapUtil> map_util = std::make_shared<JPS::VoxelMapUtil>();
         // vector<int> map;
         std::vector<signed char> map(GridMap_->md_.occupancy_buffer_inflate_.begin(), GridMap_->md_.occupancy_buffer_inflate_.end());
@@ -137,7 +139,8 @@ namespace flight_corridor
         std::unique_ptr<JPSPlanner3D> planner_ptr(new JPSPlanner3D(true));
         planner_ptr->setMapUtil(map_util);
         planner_ptr->updateMap();
-        bool valid_jps = planner_ptr->plan(start, goal, 1, true);
+        planner_ptr->plan(start, goal, 1, true);
+        // if(valid_jps)
         return planner_ptr->getRawPath();
         // for(const auto& it: path_jps)
         //     std::cout << it.transpose() << std::endl;
@@ -351,7 +354,10 @@ namespace flight_corridor
         dy = abs(node1->index(1) - node2->index(1));
         dz = abs(node1->index(2) - node2->index(2));
         dmin = min(min(dx, dy), dz);
-        if(dmin==dx){
+        d1 = 0;
+        d2 = 0;
+        if (dmin == dx)
+        {
             d1 = dy;
             d2 = dz;
         }
