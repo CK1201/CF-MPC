@@ -9,17 +9,18 @@ namespace flight_corridor
         nh.param("flight_corridor/goal_x", Goal_[0], 0.0); // 目标位置
         nh.param("flight_corridor/goal_y", Goal_[1], 0.0);
         nh.param("flight_corridor/goal_z", Goal_[2], 0.0);
+        nh.param("flight_corridor/use_jps", UseJPS_, true);
+        
 
         GridMap_.reset(new GridMap);
         GridMap_->initMap(nh);
         // AStar_.reset(new AStar);
         // AStar_->initGridMap(GridMap_, Eigen::Vector3i(100, 100, 100));
 
-        ExecTimer_ = nh.createTimer(ros::Duration(0.01), &FLIGHTCORRIDOR::execSFCCallback, this);
+        ExecTimer_ = nh.createTimer(ros::Duration(0.02), &FLIGHTCORRIDOR::execSFCCallback, this);
 
         OdomSub_ = nh.subscribe<nav_msgs::Odometry>("/hummingbird/ground_truth/odometry", 1, &FLIGHTCORRIDOR::QuadOdomCallback, this);
-        // PointCloudRawSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/camera/depth/color/points", 1, &FLIGHTCORRIDOR::PointCloudCallback, this);
-        // OctoMapSub_ = nh.subscribe<octomap_msgs::Octomap>("/octomap_full", 1, &FLIGHTCORRIDOR::OctoMapCallback, this);
+        // OctoMapSub_ = nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 1, &FLIGHTCORRIDOR::OctoMapCallback, this);
         OctoMapCenterSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/octomap_point_cloud_centers", 1, &FLIGHTCORRIDOR::OctoMapCenterCallback, this);
 
         PointCloudPub_ = nh.advertise<sensor_msgs::PointCloud>("/obstacle", 1);
@@ -34,18 +35,13 @@ namespace flight_corridor
     void FLIGHTCORRIDOR::execSFCCallback(const ros::TimerEvent &e){
         if (!HaveOdom_ || !HaveMap_)
             return;
-        
-        Path_ = FLIGHTCORRIDOR::getPath(Goal_);
 
+        double time = ros::Time::now().toSec();
+        Path_ = FLIGHTCORRIDOR::getPath(Goal_, true);
+        cout << "getPath: " << ros::Time::now().toSec() - time << endl;
         decomp_util.dilate(Path_);
-
-        nav_msgs::Path PathMsg = DecompROS::vec_to_path(Path_);
-        PathMsg.header.frame_id = "map";
-        PathPub_.publish(PathMsg);
-
-        
-
         auto Polyhedrons = decomp_util.get_polyhedrons();
+        // cout << "get_polyhedrons: " << ros::Time::now().toSec() - time << endl;
         for(unsigned char i = 0; i < Polyhedrons.size() - 1; i++) {
             auto pt_inside = (Path_[i] + Path_[i+1]) / 2;
             for (unsigned int j = 0; j < Polyhedrons[i].hyperplanes().size(); j++) {
@@ -55,32 +51,24 @@ namespace flight_corridor
                     Polyhedrons[i].hyperplanes()[j].n_ = -Polyhedrons[i].hyperplanes()[j].n_;
             }
         }
+        // cout << "redirect: " << ros::Time::now().toSec() - time << endl;
+
+        nav_msgs::Path PathMsg = DecompROS::vec_to_path(Path_);
+        PathMsg.header.frame_id = "map";
+        PathPub_.publish(PathMsg);
 
         decomp_ros_msgs::PolyhedronArray PolyhedronMsg = DecompROS::polyhedron_array_to_ros(Polyhedrons);
         PolyhedronMsg.header.frame_id = "map";
         PolyhedronPub_.publish(PolyhedronMsg);
 
-        decomp_ros_msgs::EllipsoidArray EllipsoidMsg = DecompROS::ellipsoid_array_to_ros(decomp_util.get_ellipsoids());
-        EllipsoidMsg.header.frame_id = "map";
-        EllipsoidPub_.publish(EllipsoidMsg);
+        // decomp_ros_msgs::EllipsoidArray EllipsoidMsg = DecompROS::ellipsoid_array_to_ros(decomp_util.get_ellipsoids());
+        // EllipsoidMsg.header.frame_id = "map";
+        // EllipsoidPub_.publish(EllipsoidMsg);
     }
 
     void FLIGHTCORRIDOR::QuadOdomCallback(const nav_msgs::Odometry::ConstPtr &msg){
         HaveOdom_ = true;
         QuadOdom_ = *msg;
-    }
-
-    void FLIGHTCORRIDOR::PointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr &msg){
-        if(!HaveOdom_)
-            return;
-        PointCloudRaw_ = *msg;
-        // sensor_msgs::PointCloud cloud;
-        // bool success = sensor_msgs::convertPointCloud2ToPointCloud(PointCloudRaw_, cloud);
-        // cloud.header.frame_id = "map";
-        // PointCloudPub_.publish(cloud);
-        
-        // sensor_msgs::PointCloud2 msg2;
-        // pcl::toROSMsg(cloud, msg2);
     }
 
     void FLIGHTCORRIDOR::OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg){
@@ -103,19 +91,21 @@ namespace flight_corridor
         // pcl::fromROSMsg(OctoMapCenter_, PCLcloud);
     }
 
-    vec_Vec3f FLIGHTCORRIDOR::getPath(Eigen::Vector3d goal){
+    vec_Vec3f FLIGHTCORRIDOR::getPath(Eigen::Vector3d goal, bool use_jps){
         Eigen::Vector3d start(QuadOdom_.pose.pose.position.x, QuadOdom_.pose.pose.position.y, QuadOdom_.pose.pose.position.z);
-
-        // std::vector<Eigen::Vector3i> PathID = this->AStarPlan(start, goal);
-        // vec_Vec3f Path;
-        // Eigen::Matrix<double, 3, 1> temp;
-        // Eigen::Vector3d tempPos;
-        // for (unsigned int i = 0; i < PathID.size(); i++){
-        //     GridMap_->indexToPos(PathID[i], tempPos);
-        //     temp << tempPos[0], tempPos[1], tempPos[2];
-        //     Path.push_back(temp);
-        // }
-        auto Path = this->JPSPlan(start, goal);
+        vec_Vec3f Path;
+        if(use_jps){
+            Path = this->JPSPlan(start, goal);
+        }else{
+            std::vector<Eigen::Vector3i> PathID = this->AStarPlan(start, goal);
+            Eigen::Matrix<double, 3, 1> temp;
+            Eigen::Vector3d tempPos;
+            for (unsigned int i = 0; i < PathID.size(); i++){
+                GridMap_->indexToPos(PathID[i], tempPos);
+                temp << tempPos[0], tempPos[1], tempPos[2];
+                Path.push_back(temp);
+            }
+        }
         return Path;
     }
 
@@ -133,17 +123,17 @@ namespace flight_corridor
         // cout << size << endl;
         std::shared_ptr<JPS::VoxelMapUtil> map_util = std::make_shared<JPS::VoxelMapUtil>();
         // vector<int> map;
+        // double time = ros::Time::now().toSec();
         std::vector<signed char> map(GridMap_->md_.occupancy_buffer_inflate_.begin(), GridMap_->md_.occupancy_buffer_inflate_.end());
+        // cout << "store map: " << ros::Time::now().toSec() - time<< endl;
         map_util->setMap(ori1, size1, map, GridMap_->mp_.resolution_);
-
         std::unique_ptr<JPSPlanner3D> planner_ptr(new JPSPlanner3D(true));
         planner_ptr->setMapUtil(map_util);
         planner_ptr->updateMap();
-        planner_ptr->plan(start, goal, 1, true);
-        // if(valid_jps)
+        // cout << "upadte map: " << ros::Time::now().toSec() - time<< endl;
+        planner_ptr->plan(start, goal, 1, UseJPS_);
+        // cout << "plan: " << ros::Time::now().toSec() - time<< endl;
         return planner_ptr->getRawPath();
-        // for(const auto& it: path_jps)
-        //     std::cout << it.transpose() << std::endl;
     }
 
     std::vector<Eigen::Vector3i> FLIGHTCORRIDOR::AStarPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal){
@@ -335,12 +325,12 @@ namespace flight_corridor
     double FLIGHTCORRIDOR::getHeu(GridNodePtr node1, GridNodePtr node2){
         double dis;
         //Dijkstra
-        dis = 0;
+        // dis = 0;
 
         //Manhattan
-        dis = abs(node1->index(0) - node2->index(0)) +
-            abs(node1->index(1) - node2->index(1)) +
-            abs(node1->index(2) - node2->index(2));
+        // dis = abs(node1->index(0) - node2->index(0)) +
+        //     abs(node1->index(1) - node2->index(1)) +
+        //     abs(node1->index(2) - node2->index(2));
 
         //Euclidean
         dis = sqrt(
@@ -349,26 +339,26 @@ namespace flight_corridor
             (node1->index(2) - node2->index(2)) * (node1->index(2) - node2->index(2)));
 
         //Diagonal
-        double dx, dy, dz, dmin, d1, d2;
-        dx = abs(node1->index(0) - node2->index(0));
-        dy = abs(node1->index(1) - node2->index(1));
-        dz = abs(node1->index(2) - node2->index(2));
-        dmin = min(min(dx, dy), dz);
-        d1 = 0;
-        d2 = 0;
-        if (dmin == dx)
-        {
-            d1 = dy;
-            d2 = dz;
-        }
-        else if (dmin == dy){
-            d1 = dx;
-            d2 = dz;
-        }
-        else{
-            d1 = dx;
-            d2 = dy;
-        }
+        // double dx, dy, dz, dmin, d1, d2;
+        // dx = abs(node1->index(0) - node2->index(0));
+        // dy = abs(node1->index(1) - node2->index(1));
+        // dz = abs(node1->index(2) - node2->index(2));
+        // dmin = min(min(dx, dy), dz);
+        // d1 = 0;
+        // d2 = 0;
+        // if (dmin == dx)
+        // {
+        //     d1 = dy;
+        //     d2 = dz;
+        // }
+        // else if (dmin == dy){
+        //     d1 = dx;
+        //     d2 = dz;
+        // }
+        // else{
+        //     d1 = dx;
+        //     d2 = dy;
+        // }
         // dis = sqrt(3) * dmin + sqrt(2) * min(abs(d1 - dmin), abs(d2 - dmin)) + abs(d1 - d2);
 
         return dis;

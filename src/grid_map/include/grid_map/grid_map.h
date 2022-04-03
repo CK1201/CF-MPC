@@ -255,11 +255,13 @@ private:
  * ============================== */
 
 inline int GridMap::toAddress(const Eigen::Vector3i& id) {
-  return id(0) * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) + id(1) * mp_.map_voxel_num_(2) + id(2);
+  // return id(0) * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) + id(1) * mp_.map_voxel_num_(2) + id(2);
+  return id(0) + id(1) * mp_.map_voxel_num_(0) + id(2) * mp_.map_voxel_num_(0) * mp_.map_voxel_num_(1);
 }
 
 inline int GridMap::toAddress(int& x, int& y, int& z) {
-  return x * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) + y * mp_.map_voxel_num_(2) + z;
+  // return x * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) + y * mp_.map_voxel_num_(2) + z;
+  return x + y * mp_.map_voxel_num_(0) + z * mp_.map_voxel_num_(0) * mp_.map_voxel_num_(1);
 }
 
 inline void GridMap::boundIndex(Eigen::Vector3i& id) {
@@ -315,10 +317,10 @@ inline void GridMap::setOccupied(Eigen::Vector3d pos) {
 }
 
 inline void GridMap::setOccupancy(Eigen::Vector3d pos, double occ) {
-  if (occ != 1 && occ != 0) {
-    cout << "occ value error!" << endl;
-    return;
-  }
+  // if (occ != 1 && occ != 0) {
+  //   cout << "occ value error!" << endl;
+  //   return;
+  // }
 
   if (!isInMap(pos)) return;
 

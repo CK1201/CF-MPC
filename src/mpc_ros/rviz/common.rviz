@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /PointCloud23
       Splitter Ratio: 0.5
     Tree Height: 1088
   - Class: rviz/Selection
@@ -208,7 +207,7 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 1.75
+        Max Value: 2.549999952316284
         Min Value: -0.05000000074505806
         Value: true
       Axis: Z
@@ -261,7 +260,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 13.127090454101562
+      Distance: 7.408418655395508
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -276,10 +275,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.43479862809181213
+      Pitch: 0.44479846954345703
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.0836539268493652
+      Yaw: 2.412295341491699
     Saved: ~
 Window Geometry:
   Displays:

@@ -34,7 +34,7 @@ namespace flight_corridor
 {
     class FLIGHTCORRIDOR{
     private:
-        bool HaveOdom_, HaveMap_;
+        bool HaveOdom_, HaveMap_, UseJPS_;
         /* parameters */
         Eigen::Vector3d Goal_;
         vec_Vec3f Obstacle_, Path_;
@@ -57,12 +57,11 @@ namespace flight_corridor
         /* ROS functions */
         void execSFCCallback(const ros::TimerEvent &e);
         void QuadOdomCallback(const nav_msgs::Odometry::ConstPtr &msg);
-        void PointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
         void OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg);
         void OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
 
         /* Other functions */
-        vec_Vec3f getPath(Eigen::Vector3d goal);
+        vec_Vec3f getPath(Eigen::Vector3d goal, bool use_jps);
         vec_Vec3f JPSPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
         std::vector<Eigen::Vector3i> AStarPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
         double getHeu(GridNodePtr node1, GridNodePtr node2);

@@ -93,30 +93,19 @@ void GridMap::initMap(ros::NodeHandle &nh)
   md_.proj_points_cnt = 0;
 
   md_.cam2body_ << 0.0, 0.0, 1.0, 0.0,
-      -1.0, 0.0, 0.0, 0.0,
-      0.0, -1.0, 0.0, 0.0,
-      0.0, 0.0, 0.0, 1.0;
+                  -1.0, 0.0, 0.0, 0.0,
+                  0.0, -1.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 1.0;
+
+  resetBuffer();
 
   /* init callback */
 
-  // depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(node_, "grid_map/depth", 50));
-  // extrinsic_sub_ = node_.subscribe<nav_msgs::Odometry>(
-  //     "/vins_estimator/extrinsic", 10, &GridMap::extrinsicCallback, this); //sub
-
-  // odom_sub_.reset(new message_filters::Subscriber<nav_msgs::Odometry>(node_, "grid_map/odom", 100, ros::TransportHints().tcpNoDelay()));
-  // sync_image_odom_.reset(new message_filters::Synchronizer<SyncPolicyImageOdom>(SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_));
-  // sync_image_odom_->registerCallback(boost::bind(&GridMap::depthOdomCallback, this, _1, _2));
-
-  // use odometry and point cloud
-  // indep_cloud_sub_ = node_.subscribe<sensor_msgs::PointCloud2>("grid_map/cloud", 10, &GridMap::cloudCallback, this);
-  // indep_odom_sub_ = node_.subscribe<nav_msgs::Odometry>("grid_map/odom", 10, &GridMap::odomCallback, this);
   OctoMapCenterSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/octomap_point_cloud_centers", 1, &GridMap::OctoMapCenterCallback, this);
   // OctoMapSub_ = nh.subscribe<octomap_msgs::Octomap>("/octomap_full", 1, &GridMap::OctoMapCallback, this);
+  // vis_timer_ = node_.createTimer(ros::Duration(0.11), &GridMap::visCallback, this);
 
-  // occ_timer_ = node_.createTimer(ros::Duration(0.05), &GridMap::updateOccupancyCallback, this);
-  vis_timer_ = node_.createTimer(ros::Duration(0.11), &GridMap::visCallback, this);
-
-  map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy", 10);
+  // map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy", 10);
   map_inf_pub_ = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy_inflate", 10);
 
   md_.occ_need_update_ = false;
@@ -134,10 +123,7 @@ void GridMap::initMap(ros::NodeHandle &nh)
   md_.flag_depth_odom_timeout_ = false;
   md_.flag_use_depth_fusion = false;
 
-  // rand_noise_ = uniform_real_distribution<double>(-0.2, 0.2);
-  // rand_noise2_ = normal_distribution<double>(0, 0.2);
-  // random_device rd;
-  // eng_ = default_random_engine(rd());
+  
 }
 
 void GridMap::resetBuffer(){
@@ -167,40 +153,58 @@ void GridMap::resetBuffer(Eigen::Vector3d min_pos, Eigen::Vector3d max_pos){
       }
 }
 
-
-
-
-
 void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg){
+  double time = ros::Time::now().toSec();
   md_.has_cloud_ = true;
-  pcl::PointCloud<pcl::PointXYZ> latest_cloud;
+  pcl::PointCloud<pcl::PointXYZ> latest_cloud, cloud;
   pcl::fromROSMsg(*msg, latest_cloud);
   if (latest_cloud.points.size() == 0)
     return;
-  this->resetBuffer();
+  // resetBuffer();
 
-  pcl::PointXYZ pt;
+  pcl::PointXYZ pt, pt2;
   Eigen::Vector3d p3d;
-  double time = ros::Time::now().toSec();
+
+  int inf_step = ceil(mp_.obstacles_inflation_ / mp_.resolution_);
+  int inf_step_z = 1;
+  
   for (size_t i = 0; i < latest_cloud.points.size(); ++i)
   {
     pt = latest_cloud.points[i];
-    p3d(0) = pt.x, p3d(1) = pt.y, p3d(2) = pt.z;
-    this->setOccupied(p3d);
-    this->setOccupancy(p3d, 1.0);
+    for (int x = -inf_step; x <= inf_step; ++x)
+      for (int y = -inf_step; y <= inf_step; ++y)
+        for (int z = -inf_step_z; z <= inf_step_z; ++z){
+          p3d(0) = pt.x + x * mp_.resolution_, p3d(1) = pt.y + y * mp_.resolution_, p3d(2) = pt.z + z * mp_.resolution_;
+          pt2.x = p3d(0), pt2.y = p3d(1), pt2.z = p3d(2);
+          setOccupied(p3d);
+          cloud.push_back(pt2);
+        }
+
+    // setOccupancy(p3d, 1.0);
   }
   // add virtual ceiling to limit flight height
-  // if (mp_.virtual_ceil_height_ > -0.5) {
-  //   int ceil_id = floor((mp_.virtual_ceil_height_ - mp_.map_origin_(2)) * mp_.resolution_inv_);
-  //   for (int x = md_.local_bound_min_(0); x <= md_.local_bound_max_(0); ++x)
-  //     for (int y = md_.local_bound_min_(1); y <= md_.local_bound_max_(1); ++y){
-  //       md_.occupancy_buffer_inflate_[toAddress(x, y, ceil_id)] = 1;
-  //       md_.occupancy_buffer_[toAddress(x, y, ceil_id)] = 1;
-  //     }
-  // }
+  if (mp_.virtual_ceil_height_ > -0.5) {
+    int ceil_id = floor((mp_.virtual_ceil_height_ - mp_.map_origin_(2)) * mp_.resolution_inv_);
+    for (int x = md_.local_bound_min_(0); x <= md_.local_bound_max_(0); ++x)
+      for (int y = md_.local_bound_min_(1); y <= md_.local_bound_max_(1); ++y){
+        Eigen::Vector3i id(x, y, ceil_id);
+        boundIndex(id);
+        md_.occupancy_buffer_inflate_[toAddress(id)] = 1;
+        // md_.occupancy_buffer_[toAddress(id)] = 1;
+      }
+  }
+  cloud.width = cloud.points.size();
+  cloud.height = 1;
+  cloud.is_dense = true;
+  cloud.header.frame_id = mp_.frame_id_;
+  sensor_msgs::PointCloud2 cloud_msg;
+  pcl::toROSMsg(cloud, cloud_msg);
+  map_inf_pub_.publish(cloud_msg);
+  // map_inf_pub_.publish(*msg);
+
   // ROS_INFO("process pointcloud");
   // cout << latest_cloud.points.size() << endl;
-  // cout << ros::Time::now().toSec() - time << endl << endl;
+  // cout << "time for octo2grid: " << ros::Time::now().toSec() - time << endl << endl;
   
 }
 
@@ -208,7 +212,7 @@ void GridMap::OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg){
   OctoMap_ = (octomap::OcTree*)octomap_msgs::msgToMap(*msg);
   Eigen::Vector3d p3d;
   pcl::PointCloud<pcl::PointXYZI>::Ptr occupied_nodes(new pcl::PointCloud<pcl::PointXYZI>());
-  double time = ros::Time::now().toSec();
+  // double time = ros::Time::now().toSec();
   // ROS_INFO("process pointcloud");
   for(octomap::OcTree::leaf_iterator it = OctoMap_->begin_leafs(), end = OctoMap_->end_leafs();it != end; ++it){
     pcl::PointXYZI cube_center;
@@ -226,12 +230,16 @@ void GridMap::OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg){
       occupied_nodes->points.push_back(cube_center);
     }
   }
-  occupied_nodes->header.frame_id = "map";
+  occupied_nodes->header.frame_id = mp_.frame_id_;
   if (mp_.virtual_ceil_height_ > -0.5) {
     int ceil_id = floor((mp_.virtual_ceil_height_ - mp_.map_origin_(2)) * mp_.resolution_inv_);
     for (int x = md_.local_bound_min_(0); x <= md_.local_bound_max_(0); ++x)
-      for (int y = md_.local_bound_min_(1); y <= md_.local_bound_max_(1); ++y)
-        md_.occupancy_buffer_inflate_[toAddress(x, y, ceil_id)] = 1;
+      for (int y = md_.local_bound_min_(1); y <= md_.local_bound_max_(1); ++y){
+        Eigen::Vector3i id(x, y, ceil_id);
+        boundIndex(id);
+        md_.occupancy_buffer_inflate_[toAddress(id)] = 1;
+        md_.occupancy_buffer_[toAddress(id)] = 1;
+      }
   }
   // ROS_INFO("process pointcloud");
   // cout << occupied_nodes->size() << endl;
@@ -240,7 +248,8 @@ void GridMap::OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg){
 
 void GridMap::visCallback(const ros::TimerEvent & /*event*/){
   publishMapInflate(true);
-  publishMap();
+  // publishMap();
+  return;
 }
 
 void GridMap::publishMap()
@@ -302,7 +311,6 @@ void GridMap::publishMapInflate(bool all_info)
 
   // if (map_inf_pub_.getNumSubscribers() <= 0)
   //   return;
-  // ROS_WARN("send mapInflate");
   pcl::PointXYZ pt;
   pcl::PointCloud<pcl::PointXYZ> cloud;
 
@@ -347,11 +355,8 @@ void GridMap::publishMapInflate(bool all_info)
   cloud.is_dense = true;
   cloud.header.frame_id = mp_.frame_id_;
   sensor_msgs::PointCloud2 cloud_msg;
-
   pcl::toROSMsg(cloud, cloud_msg);
   map_inf_pub_.publish(cloud_msg);
-
-  // ROS_INFO("pub map");
 }
 
 bool GridMap::odomValid(){return md_.has_odom_;}
@@ -362,6 +367,4 @@ Eigen::Vector3d GridMap::getOrigin(){return mp_.map_origin_;}
 
 int GridMap::getVoxelNum(){return mp_.map_voxel_num_[0] * mp_.map_voxel_num_[1] * mp_.map_voxel_num_[2];}
 
-void GridMap::getRegion(Eigen::Vector3d &ori, Eigen::Vector3d &size){
-  ori = mp_.map_origin_, size = mp_.map_size_;
-}
+void GridMap::getRegion(Eigen::Vector3d &ori, Eigen::Vector3d &size){ ori = mp_.map_origin_, size = mp_.map_size_; }

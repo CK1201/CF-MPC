@@ -916,18 +916,18 @@
       <pose frame=''>0 0 0 0 -0 0</pose>
     </model>
     <state world_name='default'>
-      <sim_time>374 850000000</sim_time>
-      <real_time>297 34954574</real_time>
-      <wall_time>1648734995 557872590</wall_time>
-      <iterations>29667</iterations>
+      <sim_time>498 150000000</sim_time>
+      <real_time>123 623638499</real_time>
+      <wall_time>1648997152 970913973</wall_time>
+      <iterations>12330</iterations>
       <model name='Dumpster'>
         <pose frame=''>6.06988 0.036837 0.000938 0 0.00044 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
           <pose frame=''>6.06988 0.036837 0.000938 0 0.00044 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0.017796 0 -0 3.14159 -0.370357 3.14159</acceleration>
-          <wrench>0.017796 0 -0 0 -0 0</wrench>
+          <acceleration>0.017796 -0 0 -3.14159 -0.370357 3.14159</acceleration>
+          <wrench>0.017796 -0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='ground_plane'>
@@ -945,64 +945,84 @@
         <scale>1 1 1</scale>
         <link name='hummingbird/base_link'>
           <pose frame=''>0 -0 0.06 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
+          <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 -0 0 0 -0 0</acceleration>
           <wrench>0 -0 0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/imu_link'>
           <pose frame=''>0 -0 0.06 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 0 0 -0 0</acceleration>
-          <wrench>-0 -0 0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 0 0 -0 0</acceleration>
+          <wrench>0 -0 0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/imugt_link'>
           <pose frame=''>0 -0 0.06 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 0 0 -0 0</acceleration>
-          <wrench>-0 -0 0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 -0 0 -0 0</acceleration>
+          <wrench>0 -0 -0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/odometry_sensor1_link'>
           <pose frame=''>0 -0 0.06 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 0 0 -0 0</acceleration>
-          <wrench>-0 -0 0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 -0 0 -0 0</acceleration>
+          <wrench>0 -0 -0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/odometry_sensorgt_link'>
           <pose frame=''>0 -0 0.06 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 0 0 -0 0</acceleration>
-          <wrench>-0 -0 0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 -0 0 -0 0</acceleration>
+          <wrench>0 -0 -0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/rotor_0'>
           <pose frame=''>0.17 -0 0.07 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 0 0 -0 0</acceleration>
-          <wrench>-0 -0 0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 -0 0 -0 0</acceleration>
+          <wrench>0 -0 -0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/rotor_1'>
           <pose frame=''>0 0.17 0.07 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 0 0 -0 0</acceleration>
-          <wrench>-0 -0 0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 0 0 -0 0</acceleration>
+          <wrench>0 -0 0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/rotor_2'>
           <pose frame=''>-0.17 -0 0.07 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 0 0 -0 0</acceleration>
-          <wrench>-0 -0 0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 0 0 -0 0</acceleration>
+          <wrench>0 -0 0 0 -0 0</wrench>
         </link>
         <link name='hummingbird/rotor_3'>
           <pose frame=''>0 -0.17 0.07 0 -0 0</pose>
-          <velocity>-0 -0 0 0 -0 0</velocity>
-          <acceleration>-0 -0 -0 0 -0 0</acceleration>
-          <wrench>-0 -0 -0 0 -0 0</wrench>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 -0 0 0 -0 0</acceleration>
+          <wrench>0 -0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='law_office'>
-        <pose frame=''>0.11161 5.86871 0 0 -0 0</pose>
+        <pose frame=''>-4.53235 0.056478 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>0.11161 5.86871 0 0 -0 0</pose>
+          <pose frame=''>-4.53235 0.056478 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='law_office_0'>
+        <pose frame=''>2.29208 -5.37764 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>2.29208 -5.37764 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='law_office_1'>
+        <pose frame=''>1.93106 5.57258 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose frame=''>1.93106 5.57258 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -1014,48 +1034,11 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose frame=''>-16.7474 -2.72881 12.7941 -0 0.407643 0.072199</pose>
+        <pose frame=''>18.4254 0.07853 7.64519 -0 0.295643 3.13619</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
-    <model name='law_office'>
-      <static>1</static>
-      <link name='link'>
-        <collision name='collision'>
-          <pose frame=''>0 0 6.96244 0 -0 0</pose>
-          <geometry>
-            <box>
-              <size>6.84401 5.43165 13.9249</size>
-            </box>
-          </geometry>
-          <max_contacts>10</max_contacts>
-          <surface>
-            <contact>
-              <ode/>
-            </contact>
-            <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
-          </surface>
-        </collision>
-        <visual name='visual'>
-          <geometry>
-            <mesh>
-              <uri>model://law_office/meshes/law_office.dae</uri>
-            </mesh>
-          </geometry>
-        </visual>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-      </link>
-      <pose frame=''>0.11161 5.86871 0 0 -0 0</pose>
-    </model>
     <model name='Dumpster'>
       <link name='link'>
         <collision name='collision'>
@@ -1111,6 +1094,117 @@
         <kinematic>0</kinematic>
       </link>
       <pose frame=''>6.06988 0.036837 0 0 -0 0</pose>
+    </model>
+    <model name='law_office'>
+      <static>1</static>
+      <link name='link'>
+        <collision name='collision'>
+          <pose frame=''>0 0 6.96244 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>6.84401 5.43165 13.9249</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://law_office/meshes/law_office.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>-4.53235 0.056478 0 0 -0 0</pose>
+    </model>
+    <model name='law_office_0'>
+      <static>1</static>
+      <link name='link'>
+        <collision name='collision'>
+          <pose frame=''>0 0 6.96244 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>6.84401 5.43165 13.9249</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://law_office/meshes/law_office.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>2.29208 -5.37764 0 0 -0 0</pose>
+    </model>
+    <model name='law_office_1'>
+      <static>1</static>
+      <link name='link'>
+        <collision name='collision'>
+          <pose frame=''>0 0 6.96244 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>6.84401 5.43165 13.9249</size>
+            </box>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://law_office/meshes/law_office.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose frame=''>1.93106 5.57258 0 0 -0 0</pose>
     </model>
   </world>
 </sdf>

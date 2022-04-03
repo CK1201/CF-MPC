@@ -4,11 +4,12 @@
     <arg name="flight_corridor/goal_x" default="10.1"/>
     <arg name="flight_corridor/goal_y" default="0.5"/>
     <arg name="flight_corridor/goal_z" default="0.5"/>
+    <arg name="flight_corridor/use_jps" default="false"/>
 
-    <arg name="grid_map/resolution" default="0.05"/>
+    <arg name="grid_map/resolution" default="0.1"/>
     <arg name="grid_map/map_size_x" default="30.0"/>
-    <arg name="grid_map/map_size_y" default="30.0"/>
-    <arg name="grid_map/map_size_z" default="15.0"/>
+    <arg name="grid_map/map_size_y" default="10.0"/>
+    <arg name="grid_map/map_size_z" default="5.0"/>
     <arg name="grid_map/local_update_range_x" default="5.5"/>
     <arg name="grid_map/local_update_range_y" default="5.5"/>
     <arg name="grid_map/local_update_range_z" default="4.5"/>
@@ -36,7 +37,7 @@
     <arg name="grid_map/min_ray_length" default="0.1"/>
     <arg name="grid_map/max_ray_length" default="4.5"/>
 
-    <arg name="grid_map/visualization_truncate_height" default="14.9"/>
+    <arg name="grid_map/visualization_truncate_height" default="14.8"/>
     <arg name="grid_map/virtual_ceil_height" default="15.0"/>
     <!-- <arg name="grid_map/virtual_ceil_yp" default="0.1"/> -->
     <!-- <arg name="grid_map/virtual_ceil_yn" default="0.1"/> -->
@@ -61,6 +62,7 @@
         <param name="flight_corridor/goal_x" value="$(arg flight_corridor/goal_x)"/>
         <param name="flight_corridor/goal_y" value="$(arg flight_corridor/goal_y)"/>
         <param name="flight_corridor/goal_z" value="$(arg flight_corridor/goal_z)"/>
+        <param name="flight_corridor/use_jps" value="$(arg flight_corridor/use_jps)"/>
 
         <param name="grid_map/resolution" value="$(arg grid_map/resolution)"/>
         <param name="grid_map/map_size_x" value="$(arg grid_map/map_size_x)"/>

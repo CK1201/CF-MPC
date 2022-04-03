@@ -542,11 +542,20 @@ class QuadMPC:
         yawdotdot = np.zeros((N_node + 1, 1))
         t = time_now + np.linspace(0, t_horizon, N_node + 1)
         dt = t[1] - t[0]
+        
         if experiment == 'hover':
-            p[:, 0] = hover_point[0]
-            p[:, 1] = hover_point[1]
-            p[:, 2] = hover_point[2]
-            yaw[:, 0] = np.pi / 2
+            velocity = 1 # m/s
+            timeAll = np.linalg.norm((hover_point - start_point)) / velocity
+            temp_t = np.concatenate((t[np.newaxis,:] / timeAll, np.ones((1, N_node + 1))), axis=0)
+            temp_t = temp_t.min(0)[:,np.newaxis]
+            temp_t = np.repeat(temp_t, repeats=3, axis=1)
+            temp_p = (hover_point - start_point)[np.newaxis,:]
+            temp_p = np.repeat(temp_p, repeats=N_node + 1, axis=0)
+            p = temp_t * temp_p
+            # p[:, 0] = temp[0]
+            # p[:, 1] = temp[1]
+            # p[:, 2] = temp[2]
+            yaw[:, 0] = 0
 
         elif experiment == 'circle':
             w = 2 # rad/s
