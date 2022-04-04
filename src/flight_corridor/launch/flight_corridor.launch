@@ -4,7 +4,7 @@
     <arg name="flight_corridor/goal_x" default="10.1"/>
     <arg name="flight_corridor/goal_y" default="0.5"/>
     <arg name="flight_corridor/goal_z" default="0.5"/>
-    <arg name="flight_corridor/use_jps" default="false"/>
+    <arg name="flight_corridor/use_jps" default="true"/>
 
     <arg name="grid_map/resolution" default="0.1"/>
     <arg name="grid_map/map_size_x" default="30.0"/>

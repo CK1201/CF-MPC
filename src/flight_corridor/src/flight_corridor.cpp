@@ -38,7 +38,7 @@ namespace flight_corridor
 
         double time = ros::Time::now().toSec();
         Path_ = FLIGHTCORRIDOR::getPath(Goal_, true);
-        cout << "getPath: " << ros::Time::now().toSec() - time << endl;
+        // cout << "getPath: " << ros::Time::now().toSec() - time << endl;
         decomp_util.dilate(Path_);
         auto Polyhedrons = decomp_util.get_polyhedrons();
         // cout << "get_polyhedrons: " << ros::Time::now().toSec() - time << endl;

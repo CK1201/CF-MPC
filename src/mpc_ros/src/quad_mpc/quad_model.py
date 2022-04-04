@@ -22,6 +22,7 @@ class QuadrotorModel:
         self.body_width = float(attrib['body_width'])
         self.body_height = float(attrib['body_height'])
         self.arm_length = float(attrib['arm_length'])
+        self.radius_rotor = float(attrib['radius_rotor'])
         
         self.kT = float(attrib["motor_constant"])
         self.kM = float(attrib['moment_constant'])
@@ -64,18 +65,20 @@ class QuadrotorModel:
 
         RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
 
-        boxVertexNp = np.array([[self.arm_length, 0, 0],
-                              [self.arm_length, 0, self.body_height],
-                              [-self.arm_length, 0, 0],
-                              [-self.arm_length, 0, self.body_height],
-                              [0, self.arm_length, 0],
-                              [0, self.arm_length, self.body_height],
-                              [0, -self.arm_length, 0],
-                              [0, -self.arm_length, self.body_height]])
+        quad_length = self.arm_length + self.radius_rotor
+        height = self.body_height / 2
+        self.model.boxVertexNp = np.array([[quad_length, 0, -height],
+                              [quad_length, 0, height],
+                              [-quad_length, 0, -height],
+                              [-quad_length, 0, height],
+                              [0, quad_length, -height],
+                              [0, quad_length, height],
+                              [0, -quad_length, -height],
+                              [0, -quad_length, height]])
         self.model.boxVertex = ca.SX.zeros(3, 8)
         # Rotation = ca.SX.sym("Rotation", 3, 3)
-        for i in range (len(boxVertexNp)):
-            self.model.boxVertex[:,i] = RotationMat @ boxVertexNp[i] + p
+        for i in range (len(self.model.boxVertexNp)):
+            self.model.boxVertex[:,i] = RotationMat @ self.model.boxVertexNp[i][:,np.newaxis] + p
         # self.boxVertex[0] = (ca.SX.sym("Rotation", 3, 3) @ self.boxVertex[0]).T
         # print(Rotation)
         # print(self.boxVertex)

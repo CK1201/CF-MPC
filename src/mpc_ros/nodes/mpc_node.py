@@ -9,7 +9,8 @@ from nav_msgs.msg import Odometry
 from mav_msgs.msg import Actuators
 from sensor_msgs.msg import Imu
 from quadrotor_msgs.msg import ControlCommand, AutopilotFeedback
-from geometry_msgs.msg import PoseStamped, TwistStamped
+from geometry_msgs.msg import PoseStamped, Point
+from visualization_msgs.msg import Marker
 from std_srvs.srv import Empty
 from src.utils.utils import *
 from src.quad_mpc.quad_optimizer import QuadrotorOptimizer
@@ -72,6 +73,7 @@ class QuadMPC:
         self.have_odom = False
         self.have_ap_fb = False
         self.have_reach_start_point_cmd = False
+        self.have_polyhedron = False
         self.trigger = False
         self.reach_start_point = False
         # self.start_record_fit_data = True
@@ -82,8 +84,11 @@ class QuadMPC:
         dir_path = os.path.dirname(os.path.realpath(__file__))
         config_dir = dir_path + '/../config'
         result_dir = dir_path + '/../result'
+        mesh_dir = dir_path + '/../mesh'
         self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
         self.yaml_file = os.path.join(config_dir, quad_name + '.yaml')
+        # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
+        self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
         Drag_A = np.zeros((3, 3))
         if self.havenot_fit_param or not(self.with_drag):
             Drag_D = np.zeros((3, 3))
@@ -109,6 +114,8 @@ class QuadMPC:
         # load model
         self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh, Drag_A=Drag_A, Drag_B=Drag_B))
         # Subscribers
+        self.quad_vis_pub = rospy.Publisher('/' + quad_name + '/quad_odom', Marker, queue_size=1, tcp_nodelay=True)
+        self.quad_box_vis_pub = rospy.Publisher('/' + quad_name + '/quad_box', Marker, queue_size=1, tcp_nodelay=True)
         self.odom_sub = rospy.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry, self.odom_callback)
         self.trigger_sub = rospy.Subscriber('/' + quad_name + '/trigger', std_msgs.msg.Empty, self.trigger_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
@@ -133,6 +140,8 @@ class QuadMPC:
         # self.control_vel_pub = rospy.Publisher('/' + quad_name + '/autopilot/velocity_command', TwistStamped, queue_size=1, tcp_nodelay=True)
         # self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.ap_control_cmd_pub = rospy.Publisher('/' + quad_name + '/autopilot/control_command_input', ControlCommand, queue_size=1, tcp_nodelay=True)
+        self.traj_vis_pub = rospy.Publisher('/' + quad_name + '/quad_traj', Marker, queue_size=1, tcp_nodelay=True)
+        
         # Trying to unpause Gazebo for 10 seconds.
         rospy.wait_for_service('/gazebo/unpause_physics')
         unpause_gazebo = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
@@ -258,6 +267,74 @@ class QuadMPC:
         self.v_w = v_dot_q(np.array([msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z]), np.array(self.q)).tolist()
         self.w = [msg.twist.twist.angular.x, msg.twist.twist.angular.y, msg.twist.twist.angular.z]
         self.x0 = np.concatenate((self.p, self.v_w, self.q, self.w))
+
+
+        quad_odom = Marker()
+        quad_odom.header.frame_id = 'world'
+        quad_odom.header.stamp = msg.header.stamp
+        quad_odom.ns = "mesh"
+        quad_odom.id = 0
+        quad_odom.action = Marker.ADD
+        quad_odom.mesh_resource = self.mesh_file
+        quad_odom.pose.position.x = self.p[0]
+        quad_odom.pose.position.y = self.p[1]
+        quad_odom.pose.position.z = self.p[2]
+        quad_odom.pose.orientation.w = self.q[0]
+        quad_odom.pose.orientation.x = self.q[1]
+        quad_odom.pose.orientation.y = self.q[2]
+        quad_odom.pose.orientation.z = self.q[3]
+        quad_odom.scale.x = 1
+        quad_odom.scale.y = 1
+        quad_odom.scale.z = 1
+        quad_odom.type = Marker.MESH_RESOURCE
+        quad_odom.mesh_use_embedded_materials = True
+        self.quad_vis_pub.publish(quad_odom)
+
+
+        quad_box = Marker()
+        quad_box.header.frame_id = '/world'
+        quad_box.header.stamp = rospy.Time.now()
+        quad_box.ns = "quad_box"
+        quad_box.id = 0
+        quad_box.type = Marker.SPHERE_LIST
+        quad_box.action = Marker.ADD
+        quad_box.pose.orientation.w = 1
+        quad_box.pose.orientation.x = 0
+        quad_box.pose.orientation.y = 0
+        quad_box.pose.orientation.z = 0
+        quad_box.color.r = 1
+        quad_box.color.g = 0
+        quad_box.color.b = 0
+        quad_box.color.a = 1
+        quad_box.scale.x = 0.05
+        quad_box.scale.y = 0.05
+        quad_box.scale.z = 0.05
+
+        pos = np.array(self.p)
+        boxVertexNp = self.quadrotorOptimizer.quadrotorModel.model.boxVertexNp
+        RotationMat = quat_to_rotation_matrix(unit_quat(np.array(self.q)))
+        # if self.have_polyhedron:
+        #     polyhedrons = self.PolyhedronArray.polyhedrons
+        # cost = 0
+        for i in range(len(boxVertexNp)):
+            pot = boxVertexNp[i]
+            temp_pos = RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis]
+            point = Point()
+            point.x = temp_pos[0]
+            point.y = temp_pos[1]
+            point.z = temp_pos[2]
+            quad_box.points.append(point)
+
+            # if self.have_polyhedron:
+            #     for k in range(len(polyhedrons[0].points)):
+            #         temp = polyhedrons[0].points[k]
+            #         point = np.array([temp.x, temp.y, temp.z])
+            #         temp = polyhedrons[0].normals[k]
+            #         normal = np.array([temp.x, temp.y, temp.z])
+            #         b = normal.dot(point)
+            #         cost += max(normal.dot(temp_pos) - b, 0)
+        # print(cost)
+        self.quad_box_vis_pub.publish(quad_box)
         return
     
     def trigger_callback(self, msg):
@@ -278,34 +355,8 @@ class QuadMPC:
     def PolyhedronArray_callback(self, msg):
         if not(self.have_odom):
             return
+        self.have_polyhedron = True
         self.PolyhedronArray = msg
-        # select = 0
-        # for i in range(len(self.PolyhedronArray.polyhedrons) - 1):
-        #     inside = True
-        #     for j in range(len(self.PolyhedronArray.polyhedrons[i + 1].points)):
-        #         temp = self.PolyhedronArray.polyhedrons[i + 1].points[j]
-        #         point = np.array([temp.x, temp.y, temp.z])
-        #         temp = self.PolyhedronArray.polyhedrons[i + 1].normals[j]
-        #         normal = np.array([temp.x, temp.y, temp.z])
-        #         b = normal.dot(point)
-        #         print(normal.dot(np.array(self.p)))
-        #         print(b)
-        #         if normal.dot(np.array(self.p)) > b:
-        #             inside = False
-        #             break
-        #     if inside == False:
-        #         break
-        #     else:
-        #         select = i + 1
-        # selectedPolyhedron = self.PolyhedronArray.polyhedrons[select]
-        # print(type(self.PolyhedronArray.polyhedrons[0].points[0]))
-        # print(self.PolyhedronArray.polyhedrons[0].points[0])
-        # print("polyhedron size: ",len(self.PolyhedronArray.polyhedrons))
-        # print("select polyhedron: ",select + 1)
-        # print("polyhedron size: ", len(selectedPolyhedron.points))
-        # print(selectedPolyhedron.points[0])
-        # print(selectedPolyhedron.normals[0])
-        # print()
 
     def TimeSynchronizer_callback(self, imu_msg, odom_msg, motor_msg):
         if not(self.start_record):
@@ -406,25 +457,34 @@ class QuadMPC:
         self.desire_motor_pub.publish(desire_motor)
 
         # select polyhedron
+        boxVertexNp = self.quadrotorOptimizer.quadrotorModel.model.boxVertexNp
+        RotationMat = quat_to_rotation_matrix(unit_quat(np.array(self.q)))
+        polyhedrons = self.PolyhedronArray.polyhedrons
         select = 0
-        for i in range(len(self.PolyhedronArray.polyhedrons) - 1):
+        for i in range(len(polyhedrons) - 1):
             inside = True
-            for j in range(len(self.PolyhedronArray.polyhedrons[i + 1].points)):
-                temp = self.PolyhedronArray.polyhedrons[i + 1].points[j]
+            for j in range(len(polyhedrons[i + 1].points)):
+                temp = polyhedrons[i + 1].points[j]
                 point = np.array([temp.x, temp.y, temp.z])
-                temp = self.PolyhedronArray.polyhedrons[i + 1].normals[j]
+                temp = polyhedrons[i + 1].normals[j]
                 normal = np.array([temp.x, temp.y, temp.z])
                 b = normal.dot(point)
-                print(normal.dot(np.array(self.p)))
-                print(b)
-                if normal.dot(np.array(self.p)) > b:
-                    inside = False
+                pos = np.array(self.p)
+                for k in range(len(boxVertexNp)):
+                    pot = boxVertexNp[k]
+                    # print(pot[:,np.newaxis])
+                    # print(RotationMat)
+                    # print(RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis])
+                    if normal.dot(RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis]) - b > 0:
+                        inside = False
+                        break
+                if inside == False:
                     break
             if inside == False:
                 break
             else:
                 select = i + 1
-        selectedPolyhedron = self.PolyhedronArray.polyhedrons[select]
+        selectedPolyhedron = polyhedrons[select]
         # print(type(self.PolyhedronArray.polyhedrons[0].points[0]))
         # print(self.PolyhedronArray.polyhedrons[0].points[0])
         # print("polyhedron size: ",len(self.PolyhedronArray.polyhedrons))
@@ -515,14 +575,34 @@ class QuadMPC:
             print("pose error:  [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(p[0] - self.p[0], p[1] - self.p[1], p[2] - self.p[2], error_pose))
             print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max * 100))
             print()
-        # print("desir vel :  [{:.2f}, {:.2f}, {:.2f}]".format(v[0], v[1], v[2]))
-        # print("desir angle: [{:.2f}, {:.2f}, {:.2f}]".format(angle[0], angle[1], angle[2]))
-        # print("desir br:    [{:.2f}, {:.2f}, {:.2f}]".format(br[0], br[1], br[2]))
-        # print("ref rotor:   [{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u[0, 0], u[0, 1], u[0, 2], u[0, 3]))
-        # print("rotor:       [{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u1[0], u1[1], u1[2], u1[3]))
-        # print("rotor error: [{:.2f}, {:.2f}, {:.2f}, {:.2f}]".format(u[0, 0] - u1[0], u[0, 1] - u1[1], u[0, 2] - u1[2], u[0, 3] - u1[3]))
-        
 
+        traj = Marker()
+        traj.header.frame_id = '/world'
+        traj.header.stamp = rospy.Time.now()
+        traj.ns = "trajectory"
+        traj.id = 0
+        traj.type = Marker.SPHERE_LIST
+        traj.action = Marker.ADD
+        
+        traj.pose.orientation.w = 1
+        traj.pose.orientation.x = 0
+        traj.pose.orientation.y = 0
+        traj.pose.orientation.z = 0
+        traj.color.r = 0
+        traj.color.g = 0
+        traj.color.b = 1
+        traj.color.a = 1
+        traj.scale.x = 0.1
+        traj.scale.y = 0.1
+        traj.scale.z = 0.1
+        for i in range(self.N):
+            temp = self.quadrotorOptimizer.acados_solver.get(i + 1, "x")
+            point = Point()
+            point.x = temp[0]
+            point.y = temp[1]
+            point.z = temp[2]
+            traj.points.append(point)
+        self.traj_vis_pub.publish(traj)
         return
 
     def getReference(self, experiment, start_point, hover_point, time_now, t_horizon, N_node, model, plot):
@@ -544,18 +624,19 @@ class QuadMPC:
         dt = t[1] - t[0]
         
         if experiment == 'hover':
-            velocity = 1 # m/s
+            velocity = 0.1 # m/s
             timeAll = np.linalg.norm((hover_point - start_point)) / velocity
             temp_t = np.concatenate((t[np.newaxis,:] / timeAll, np.ones((1, N_node + 1))), axis=0)
             temp_t = temp_t.min(0)[:,np.newaxis]
             temp_t = np.repeat(temp_t, repeats=3, axis=1)
             temp_p = (hover_point - start_point)[np.newaxis,:]
             temp_p = np.repeat(temp_p, repeats=N_node + 1, axis=0)
-            p = temp_t * temp_p
+            p = temp_t * temp_p + np.repeat(start_point[np.newaxis,:], repeats=N_node + 1, axis=0)
             # p[:, 0] = temp[0]
             # p[:, 1] = temp[1]
             # p[:, 2] = temp[2]
             yaw[:, 0] = 0
+            # print(p)
 
         elif experiment == 'circle':
             w = 2 # rad/s
