@@ -245,7 +245,7 @@ private:
   // Eigen::Vector3d closetPointInMap(const Eigen::Vector3d& pt, const Eigen::Vector3d& camera_pt);
 
   ros::NodeHandle node_;
-  ros::Publisher map_pub_, map_inf_pub_;
+  ros::Publisher map_pub_, map_inf_pub_, map_vis_pub_;
   ros::Timer occ_timer_, vis_timer_;
   ros::Subscriber OctoMapCenterSub_, OctoMapSub_;
 

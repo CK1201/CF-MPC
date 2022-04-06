@@ -8,8 +8,8 @@
 
     <arg name="grid_map/resolution" default="0.1"/>
     <arg name="grid_map/map_size_x" default="30.0"/>
-    <arg name="grid_map/map_size_y" default="10.0"/>
-    <arg name="grid_map/map_size_z" default="5.0"/>
+    <arg name="grid_map/map_size_y" default="6.0"/>
+    <arg name="grid_map/map_size_z" default="2.5"/>
     <arg name="grid_map/local_update_range_x" default="5.5"/>
     <arg name="grid_map/local_update_range_y" default="5.5"/>
     <arg name="grid_map/local_update_range_z" default="4.5"/>
@@ -37,8 +37,8 @@
     <arg name="grid_map/min_ray_length" default="0.1"/>
     <arg name="grid_map/max_ray_length" default="4.5"/>
 
-    <arg name="grid_map/visualization_truncate_height" default="14.8"/>
-    <arg name="grid_map/virtual_ceil_height" default="15.0"/>
+    <arg name="grid_map/visualization_truncate_height" default="2.4"/>
+    <arg name="grid_map/virtual_ceil_height" default="2.5"/>
     <!-- <arg name="grid_map/virtual_ceil_yp" default="0.1"/> -->
     <!-- <arg name="grid_map/virtual_ceil_yn" default="0.1"/> -->
 

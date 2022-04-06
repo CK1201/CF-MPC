@@ -103,12 +103,9 @@ class QuadrotorModel:
         # parameters
         self.model.MaxNumOfPolyhedrons = 10
         param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
-        # print(param[4:6].T @ param[4:6])
-        # print(param[:3].T @ self.boxVertex[1].T)
-        # f_expl
-        # Orientation = ca.fabs(Orientation)
+        # param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4 * 2, 1)
+
         BodyRateHat = crossmat(BodyRate)
-        
         # xb = RotationMat[:, 0]
         # yb = RotationMat[:, 1]
         # zb = RotationMat[:, 2]

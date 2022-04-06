@@ -1,11 +1,8 @@
 #!/usr/bin/env python3.6
-import imp
 import rospy, std_msgs.msg, message_filters, os, yaml
-import pandas as pd
 import numpy as np
-import seaborn as sns
-from std_msgs.msg import Int16, Bool
-from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool
+from nav_msgs.msg import Odometry, Path
 from mav_msgs.msg import Actuators
 from sensor_msgs.msg import Imu
 from quadrotor_msgs.msg import ControlCommand, AutopilotFeedback
@@ -55,11 +52,12 @@ class QuadMPC:
         self.start_point[0] = rospy.get_param('~start_x', default='0')
         self.start_point[1] = rospy.get_param('~start_y', default='0')
         self.start_point[2] = rospy.get_param('~start_z', default='1')
-        self.hover_point[0] = rospy.get_param('~hover_x', default='2')
+        self.hover_point[0] = rospy.get_param('~hover_x', default='0')
         self.hover_point[1] = rospy.get_param('~hover_y', default='0')
-        self.hover_point[2] = rospy.get_param('~hover_z', default='5')
+        self.hover_point[2] = rospy.get_param('~hover_z', default='2')
         plot = rospy.get_param('~plot', default='true')
         self.havenot_fit_param = rospy.get_param('~fit_param', default='true')
+        self.use_prior = rospy.get_param('~use_prior', default='true')
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps'
         if self.havenot_fit_param:
@@ -84,7 +82,7 @@ class QuadMPC:
         dir_path = os.path.dirname(os.path.realpath(__file__))
         config_dir = dir_path + '/../config'
         result_dir = dir_path + '/../result'
-        mesh_dir = dir_path + '/../mesh'
+        # mesh_dir = dir_path + '/../mesh'
         self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
         self.yaml_file = os.path.join(config_dir, quad_name + '.yaml')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
@@ -121,6 +119,7 @@ class QuadMPC:
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
         self.PolyhedronArray_sub = rospy.Subscriber('/flight_corridor_node/polyhedron_array', PolyhedronArray, self.PolyhedronArray_callback)
+        self.path_sub_ = rospy.Subscriber('/flight_corridor_node/path', Path, self.path_callback)
         
         # message filter
         self.imu_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/imu', Imu)
@@ -140,7 +139,10 @@ class QuadMPC:
         # self.control_vel_pub = rospy.Publisher('/' + quad_name + '/autopilot/velocity_command', TwistStamped, queue_size=1, tcp_nodelay=True)
         # self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.ap_control_cmd_pub = rospy.Publisher('/' + quad_name + '/autopilot/control_command_input', ControlCommand, queue_size=1, tcp_nodelay=True)
+        self.polyhedron_array_in_use_pub = rospy.Publisher('/' + quad_name + '/polyhedron_array_in_use_pub', PolyhedronArray, queue_size=1, tcp_nodelay=True)
+        self.path_in_use_pub = rospy.Publisher('/' + quad_name + '/path_in_use_pub', Path, queue_size=1, tcp_nodelay=True)
         self.traj_vis_pub = rospy.Publisher('/' + quad_name + '/quad_traj', Marker, queue_size=1, tcp_nodelay=True)
+
         
         # Trying to unpause Gazebo for 10 seconds.
         rospy.wait_for_service('/gazebo/unpause_physics')
@@ -358,6 +360,9 @@ class QuadMPC:
         self.have_polyhedron = True
         self.PolyhedronArray = msg
 
+    def path_callback(self, msg):
+        self.Path = msg
+
     def TimeSynchronizer_callback(self, imu_msg, odom_msg, motor_msg):
         if not(self.start_record):
             return
@@ -406,6 +411,10 @@ class QuadMPC:
                     self.start_record = True
                     self.start_record_time = rospy.Time.now().to_sec()
                     self.have_reach_start_point_cmd = False
+                    self.polyhedrons = self.PolyhedronArray.polyhedrons
+                    self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
+                    self.path_in_use_pub.publish(self.Path)
+                    self.max_select = 0
                     print("arrive start point")
             return
         elif (not self.finish_tracking):
@@ -457,50 +466,67 @@ class QuadMPC:
         self.desire_motor_pub.publish(desire_motor)
 
         # select polyhedron
+        
         boxVertexNp = self.quadrotorOptimizer.quadrotorModel.model.boxVertexNp
         RotationMat = quat_to_rotation_matrix(unit_quat(np.array(self.q)))
-        polyhedrons = self.PolyhedronArray.polyhedrons
-        select = 0
-        for i in range(len(polyhedrons) - 1):
-            inside = True
-            for j in range(len(polyhedrons[i + 1].points)):
-                temp = polyhedrons[i + 1].points[j]
-                point = np.array([temp.x, temp.y, temp.z])
-                temp = polyhedrons[i + 1].normals[j]
-                normal = np.array([temp.x, temp.y, temp.z])
-                b = normal.dot(point)
-                pos = np.array(self.p)
-                for k in range(len(boxVertexNp)):
-                    pot = boxVertexNp[k]
-                    # print(pot[:,np.newaxis])
-                    # print(RotationMat)
-                    # print(RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis])
-                    if normal.dot(RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis]) - b > 0:
+        pos = np.array(self.p)
+        select = self.max_select
+        
+        if not(self.use_prior):
+            self.polyhedrons = self.PolyhedronArray.polyhedrons
+            self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
+            self.path_in_use_pub.publish(self.Path)
+
+        # only all inside 
+        # for i in range(self.max_select, len(self.polyhedrons) - 1):
+        #     inside = True
+        #     for j in range(len(self.polyhedrons[i + 1].points)):
+        #         temp = self.polyhedrons[i + 1].points[j]
+        #         point = np.array([temp.x, temp.y, temp.z])
+        #         temp = self.polyhedrons[i + 1].normals[j]
+        #         normal = np.array([temp.x, temp.y, temp.z])
+        #         b = normal.dot(point)
+        #         for k in range(len(boxVertexNp)):
+        #             pot = boxVertexNp[k]
+        #             if normal.dot(RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis]) - b > 0:
+        #                 inside = False
+        #                 break
+        #         if inside == False:
+        #             break
+        #     if inside == False:
+        #         break
+        #     else:
+        #         select = i + 1
+        #         if self.use_prior:
+        #             self.max_select = select
+
+        # as long as one inside
+        for i in range(self.max_select, len(self.polyhedrons) - 1):
+            for k in range(len(boxVertexNp)):
+                inside = True
+                pot = boxVertexNp[k]
+                pot = RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis]
+                for j in range(len(self.polyhedrons[i + 1].points)):
+                    temp = self.polyhedrons[i + 1].points[j]
+                    point = np.array([temp.x, temp.y, temp.z])
+                    temp = self.polyhedrons[i + 1].normals[j]
+                    normal = np.array([temp.x, temp.y, temp.z])
+                    b = normal.dot(point)
+                    
+                    if normal.dot(pot) - b > 0:
                         inside = False
                         break
-                if inside == False:
+                if inside == True:
                     break
             if inside == False:
                 break
             else:
                 select = i + 1
-        selectedPolyhedron = polyhedrons[select]
-        # print(type(self.PolyhedronArray.polyhedrons[0].points[0]))
-        # print(self.PolyhedronArray.polyhedrons[0].points[0])
-        # print("polyhedron size: ",len(self.PolyhedronArray.polyhedrons))
-        # print("select polyhedron: ",select + 1)
-        # print("polyhedron size: ", len(selectedPolyhedron.points))
-        # print(selectedPolyhedron.points[0])
-        # print(selectedPolyhedron.normals[0])
-        # print()
-        
-        # self.quadrotorOptimizer.acados_solver.acados_ocp.constraints.
-        # self.quadrotorOptimizer.ocp.cost.set
+                if self.use_prior:
+                    self.max_select = select
 
-        # ubx = np.array([11, np.pi * 2, np.pi * 2, np.pi * 1])
-        # lbx = np.array([0, -np.pi * 2, -np.pi * 2, -np.pi * 1])
-        self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
-        self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
+        selectedPolyhedron = self.polyhedrons[select]
+        # selectedPolyhedron_next = self.polyhedrons[min(select + 1, len(self.polyhedrons) - 1)]
 
         paramPolyhedron = np.array([])
         for i in range(self.quadrotorOptimizer.quadrotorModel.model.MaxNumOfPolyhedrons):
@@ -512,9 +538,21 @@ class QuadMPC:
                 b = normal.dot(point)
                 paramPolyhedron = np.concatenate((paramPolyhedron, normal, np.array([b])))
             else:
-                paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, 1, 0])))
+                paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
 
+        # for i in range(self.quadrotorOptimizer.quadrotorModel.model.MaxNumOfPolyhedrons):
+        #     if i < len(selectedPolyhedron_next.points):
+        #         temp = selectedPolyhedron_next.points[i]
+        #         point = np.array([temp.x, temp.y, temp.z])
+        #         temp = selectedPolyhedron_next.normals[i]
+        #         normal = np.array([temp.x, temp.y, temp.z])
+        #         b = normal.dot(point)
+        #         paramPolyhedron = np.concatenate((paramPolyhedron, normal, np.array([b])))
+        #     else:
+        #         paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
 
+        self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
+        self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
 
         for i in range(self.N):
             yref = np.concatenate((p[i], v[i], q[i], br[i], u[i]))
@@ -529,11 +567,11 @@ class QuadMPC:
                 self.quadrotorOptimizer.acados_solver.set(i, 'p', param)
 
         xref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N]))
-        if self.quadrotorOptimizer.ocp.cost.cost_type == "LINEAR_LS":
+        if self.quadrotorOptimizer.ocp.cost.cost_type_e == "LINEAR_LS":
             self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
-        elif self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
+        elif self.quadrotorOptimizer.ocp.cost.cost_type_e == "NONLINEAR_LS":
             self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
-        elif self.quadrotorOptimizer.ocp.cost.cost_type == "EXTERNAL":
+        elif self.quadrotorOptimizer.ocp.cost.cost_type_e == "EXTERNAL":
             param = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.quadrotorModel.model.u.size()[0]), paramPolyhedron))
             self.quadrotorOptimizer.acados_solver.set(self.N, 'p', param)
 
@@ -624,7 +662,7 @@ class QuadMPC:
         dt = t[1] - t[0]
         
         if experiment == 'hover':
-            velocity = 0.1 # m/s
+            velocity = 1 # m/s
             timeAll = np.linalg.norm((hover_point - start_point)) / velocity
             temp_t = np.concatenate((t[np.newaxis,:] / timeAll, np.ones((1, N_node + 1))), axis=0)
             temp_t = temp_t.min(0)[:,np.newaxis]

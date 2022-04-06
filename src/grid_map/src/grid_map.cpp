@@ -106,7 +106,8 @@ void GridMap::initMap(ros::NodeHandle &nh)
   // vis_timer_ = node_.createTimer(ros::Duration(0.11), &GridMap::visCallback, this);
 
   // map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy", 10);
-  map_inf_pub_ = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy_inflate", 10);
+  map_inf_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/occupancy_inflate", 10);
+  map_vis_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/vis", 10);
 
   md_.occ_need_update_ = false;
   md_.local_updated_ = false;
@@ -175,13 +176,24 @@ void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &ms
       for (int y = -inf_step; y <= inf_step; ++y)
         for (int z = -inf_step_z; z <= inf_step_z; ++z){
           p3d(0) = pt.x + x * mp_.resolution_, p3d(1) = pt.y + y * mp_.resolution_, p3d(2) = pt.z + z * mp_.resolution_;
-          pt2.x = p3d(0), pt2.y = p3d(1), pt2.z = p3d(2);
           setOccupied(p3d);
+          // Eigen::Vector3i id;
+          // posToIndex(p3d, id);
+          // boundIndex(id);
+          // indexToPos(id, p3d);
+          pt2.x = p3d(0), pt2.y = p3d(1), pt2.z = p3d(2);
           cloud.push_back(pt2);
         }
 
     // setOccupancy(p3d, 1.0);
   }
+  cloud.width = cloud.points.size();
+  cloud.height = 1;
+  cloud.is_dense = true;
+  cloud.header.frame_id = mp_.frame_id_;
+  sensor_msgs::PointCloud2 cloud_msg;
+  pcl::toROSMsg(cloud, cloud_msg);
+  map_vis_pub_.publish(cloud_msg);
   // add virtual ceiling to limit flight height
   if (mp_.virtual_ceil_height_ > -0.5) {
     int ceil_id = floor((mp_.virtual_ceil_height_ - mp_.map_origin_(2)) * mp_.resolution_inv_);
@@ -190,6 +202,9 @@ void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &ms
         Eigen::Vector3i id(x, y, ceil_id);
         boundIndex(id);
         md_.occupancy_buffer_inflate_[toAddress(id)] = 1;
+        indexToPos(id, p3d);
+        pt2.x = p3d(0), pt2.y = p3d(1), pt2.z = p3d(2);
+        cloud.push_back(pt2);
         // md_.occupancy_buffer_[toAddress(id)] = 1;
       }
   }
@@ -197,10 +212,10 @@ void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &ms
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = mp_.frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  // sensor_msgs::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
   map_inf_pub_.publish(cloud_msg);
-  // map_inf_pub_.publish(*msg);
+  // map_vis_pub_.publish(cloud_msg);
 
   // ROS_INFO("process pointcloud");
   // cout << latest_cloud.points.size() << endl;

@@ -97,25 +97,15 @@
     </scene>
     <wind/>
     <state world_name='default'>
-      <sim_time>729 70000000</sim_time>
-      <real_time>68 169868169</real_time>
-      <wall_time>1649246348 34042346</wall_time>
-      <iterations>6758</iterations>
+      <sim_time>564 740000000</sim_time>
+      <real_time>16 33044099</real_time>
+      <wall_time>1649246778 56842926</wall_time>
+      <iterations>1579</iterations>
       <model name='cylinder'>
         <pose frame=''>4.07089 -0.057897 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='Cylinder_0'>
           <pose frame=''>4.07089 -0.057897 0 0 0 -1.5708</pose>
-          <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 0 0 -0 0</acceleration>
-          <wrench>0 0 0 0 -0 0</wrench>
-        </link>
-      </model>
-      <model name='cylinder_1'>
-        <pose frame=''>8.87259 -0.030346 0 0 -0 0</pose>
-        <scale>1 1 1</scale>
-        <link name='Cylinder_0'>
-          <pose frame=''>8.87259 -0.030346 0 0 0 -1.5708</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -137,64 +127,13 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose frame=''>6.93548 10.5483 5.57218 0 0.323643 -1.527</pose>
+        <pose frame=''>2.75542 10.7196 4.5164 0 0.323643 -1.527</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
     <model name='cylinder'>
       <pose frame=''>4.07089 -0.057897 0 0 -0 0</pose>
-      <link name='Cylinder_0'>
-        <collision name='Cylinder_0_Collision'>
-          <geometry>
-            <cylinder>
-              <radius>0.5</radius>
-              <length>2.5</length>
-            </cylinder>
-          </geometry>
-          <pose frame=''>0 0 1.25 0 -0 0</pose>
-          <max_contacts>10</max_contacts>
-          <surface>
-            <contact>
-              <ode/>
-            </contact>
-            <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
-          </surface>
-        </collision>
-        <visual name='Cylinder_0_Visual'>
-          <pose frame=''>0 0 1.25 0 -0 0</pose>
-          <geometry>
-            <cylinder>
-              <radius>0.5</radius>
-              <length>2.5</length>
-            </cylinder>
-          </geometry>
-          <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-          </material>
-          <meta>
-            <layer>0</layer>
-          </meta>
-        </visual>
-        <pose frame=''>0 0 0 0 -0 -1.5708</pose>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-      </link>
-      <static>1</static>
-    </model>
-    <model name='cylinder_1'>
-      <pose frame=''>8.87259 -0.030346 0 0 -0 0</pose>
       <link name='Cylinder_0'>
         <collision name='Cylinder_0_Collision'>
           <geometry>

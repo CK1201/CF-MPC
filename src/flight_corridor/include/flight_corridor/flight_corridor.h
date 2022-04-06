@@ -37,9 +37,8 @@ namespace flight_corridor
         bool HaveOdom_, HaveMap_, UseJPS_;
         /* parameters */
         Eigen::Vector3d Goal_;
-        vec_Vec3f Obstacle_, Path_;
-        sensor_msgs::PointCloud ObstaclePointCloud_;
-        sensor_msgs::PointCloud2 PointCloudRaw_, OctoMapCenter_;
+        vec_Vec3f Path_;
+        sensor_msgs::PointCloud2 PointCloudRaw_, OctoMapCenter_, GridMapInf_;
         nav_msgs::Odometry QuadOdom_;
         octomap::OcTree* OctoMap_;
         EllipsoidDecomp3D decomp_util;
@@ -51,7 +50,7 @@ namespace flight_corridor
         
         /* ROS utils */
         ros::Timer ExecTimer_;
-        ros::Subscriber OdomSub_, PointCloudRawSub_, OctoMapSub_, OctoMapCenterSub_;
+        ros::Subscriber OdomSub_, PointCloudRawSub_, OctoMapSub_, OctoMapCenterSub_, GridMapInfSub_;
         ros::Publisher PointCloudPub_, PathPub_, EllipsoidPub_, PolyhedronPub_;
 
         /* ROS functions */
@@ -59,6 +58,7 @@ namespace flight_corridor
         void QuadOdomCallback(const nav_msgs::Odometry::ConstPtr &msg);
         void OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg);
         void OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
+        void GridMapInfCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
 
         /* Other functions */
         vec_Vec3f getPath(Eigen::Vector3d goal, bool use_jps);

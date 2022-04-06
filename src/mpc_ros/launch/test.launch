@@ -5,6 +5,8 @@
     <arg name="experiment_time" default="38"/>
     <arg name="experiment_times" default="4"/>
     <arg name="plot" default="false"/>
+    <arg name="use_prior" default="false"/>
+    <arg name="use_jps" default="true"/>
     
     <!-- <arg name="expriment" default="circle_speedup"/>
     <arg name="start_x" default="5"/>
@@ -23,8 +25,8 @@
     <arg name="start_z" default="1"/>
     
     <arg name="hover_x" default="10"/>
-    <arg name="hover_y" default="0.0"/>
-    <arg name="hover_z" default="2"/>
+    <arg name="hover_y" default="0"/>
+    <arg name="hover_z" default="1"/>
 
     <!-- circle
     circle_speedup
@@ -36,6 +38,7 @@
         <arg name="flight_corridor/goal_x" value="$(arg hover_x)"/>
         <arg name="flight_corridor/goal_y" value="$(arg hover_y)"/>
         <arg name="flight_corridor/goal_z" value="$(arg hover_z)"/>
+        <arg name="flight_corridor/use_jps" value="$(arg use_jps)"/>
     </include>
 
     <node pkg="mpc_ros" type="mpc_node.py" name="mpc_node" output="screen">
@@ -52,6 +55,7 @@
         <param name="start_z" value="$(arg start_z)"/>
         <param name="plot" value="$(arg plot)"/>
         <param name="fit_param" value="$(arg fit_param)"/>
+        <param name="use_prior" value="$(arg use_prior)"/>
     </node>
 
     

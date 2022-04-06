@@ -54,12 +54,13 @@ class QuadrotorOptimizer:
         self.ocp.dims.np = np_
         self.ocp.parameter_values = np.zeros(np_)
         # set cost
-        Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
+        # Q = np.diag(np.concatenate((np.ones(3) * 1, np.ones(3) * 0, np.ones(4) * 0, np.ones(3) * 0)))
+        Q = np.diag(np.concatenate((np.ones(3) * 1, np.ones(3) * 0.02, np.ones(4) * 0.5, np.ones(3) * 0.01)))
         # Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
-        # Q[2,2] *=  10
+        # Q[2,2] *=  0
         # Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.00, np.ones(4) * 0.0, np.ones(3) * 0.00)))
         R = np.eye(nu) * 1 / model.RotorSpeed_max
-        SafetyWeight = 0.01
+        SafetyWeight = 10
  
         # self.ocp.cost.cost_type_0 = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
         self.ocp.cost.cost_type = "EXTERNAL"
@@ -87,7 +88,7 @@ class QuadrotorOptimizer:
 
         elif self.ocp.cost.cost_type == "NONLINEAR_LS":
             self.ocp.model.cost_y_expr = ca.vertcat(acModel.x, acModel.u)
-            self.ocp.model.cost_y_expr_e = ca.vertcat(acModel.x, acModel.p)
+            self.ocp.model.cost_y_expr_e = ca.vertcat(acModel.x)
 
             self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
             self.ocp.cost.W_e = scipy.linalg.block_diag(Q)
@@ -98,15 +99,32 @@ class QuadrotorOptimizer:
 
         elif self.ocp.cost.cost_type == "EXTERNAL":
             SafetyCost = 0
+
+            
+            # for i in range(model.boxVertex.size()[1]):
+            #     cost1 = 0
+            #     cost2 = 0
+            #     for j in range (model.MaxNumOfPolyhedrons):
+            #         APolyhedron = acModel.p[ny + j * 4: ny + j * 4 + 3]
+            #         bPolyhedron = acModel.p[ny + j * 4 + 3]
+            #         cost1 += self.LossFunction(APolyhedron.T @ model.boxVertex[:,i] - bPolyhedron)
+            #         APolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4: ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
+            #         bPolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
+            #         cost2 += self.LossFunction(APolyhedron2.T @ model.boxVertex[:,i] - bPolyhedron2)
+            #     # inside 1 corridor
+            #     SafetyCost += cost1
+            #     # inside either 2 corridor
+            #     # SafetyCost += ca.fmin(cost1, cost2)
+
+            
             for i in range (model.MaxNumOfPolyhedrons):
                 APolyhedron = acModel.p[ny + i * 4: ny + i * 4 + 3]
                 bPolyhedron = acModel.p[ny + i * 4 + 3]
                 for j in range(model.boxVertex.size()[1]):
-                    SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron) * SafetyWeight
-                    # print(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
-                    # print(SafetyCost.size())
-            self.ocp.model.cost_expr_ext_cost = (ca.vertcat(acModel.x, acModel.u) - acModel.p[:ny]).T @ scipy.linalg.block_diag(Q, R) @ (ca.vertcat(acModel.x, acModel.u)  - acModel.p[:ny]) + SafetyCost
-            self.ocp.model.cost_expr_ext_cost_e = (acModel.x - acModel.p[:nx]).T @ Q @ (acModel.x - acModel.p[:nx]) + SafetyCost
+                    SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
+
+            self.ocp.model.cost_expr_ext_cost = (ca.vertcat(acModel.x, acModel.u) - acModel.p[:ny]).T @ scipy.linalg.block_diag(Q, R) @ (ca.vertcat(acModel.x, acModel.u)  - acModel.p[:ny]) + SafetyCost * SafetyWeight
+            self.ocp.model.cost_expr_ext_cost_e = (acModel.x - acModel.p[:nx]).T @ Q @ (acModel.x - acModel.p[:nx]) + SafetyCost * SafetyWeight
             # print(SafetyCost)
 
 
