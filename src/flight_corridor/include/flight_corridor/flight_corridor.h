@@ -61,7 +61,7 @@ namespace flight_corridor
         void GridMapInfCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
 
         /* Other functions */
-        vec_Vec3f getPath(Eigen::Vector3d goal, bool use_jps);
+        vec_Vec3f getPath(Eigen::Vector3d start, Eigen::Vector3d goal, bool use_jps);
         vec_Vec3f JPSPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
         std::vector<Eigen::Vector3i> AStarPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
         double getHeu(GridNodePtr node1, GridNodePtr node2);

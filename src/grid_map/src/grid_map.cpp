@@ -177,10 +177,10 @@ void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &ms
         for (int z = -inf_step_z; z <= inf_step_z; ++z){
           p3d(0) = pt.x + x * mp_.resolution_, p3d(1) = pt.y + y * mp_.resolution_, p3d(2) = pt.z + z * mp_.resolution_;
           setOccupied(p3d);
-          // Eigen::Vector3i id;
-          // posToIndex(p3d, id);
-          // boundIndex(id);
-          // indexToPos(id, p3d);
+          Eigen::Vector3i id;
+          posToIndex(p3d, id);
+          boundIndex(id);
+          indexToPos(id, p3d);
           pt2.x = p3d(0), pt2.y = p3d(1), pt2.z = p3d(2);
           cloud.push_back(pt2);
         }

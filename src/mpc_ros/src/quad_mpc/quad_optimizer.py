@@ -15,28 +15,28 @@ class QuadrotorOptimizer:
 
         acModel = AcadosModel()
         self.quadrotorModel = quadrotorModel
-        model, constraint = self.quadrotorModel.model, self.quadrotorModel.constraint
+        model, constraint   = self.quadrotorModel.model, self.quadrotorModel.constraint
 
         # define acados ODE
-        acModel.name = model.name
-        acModel.x = model.x
-        acModel.xdot = model.xdot
-        acModel.u = model.u
-        acModel.p = model.p
-        # acModel.z = model.z
+        acModel.name        = model.name
+        acModel.x           = model.x
+        acModel.xdot        = model.xdot
+        acModel.u           = model.u
+        acModel.p           = model.p
+        # acModel.z           = model.z
         acModel.f_expl_expr = model.f_expl_expr
         acModel.f_impl_expr = model.f_impl_expr
-        self.ocp.model = acModel
+        self.ocp.model      = acModel
 
         # define constraint
         # acModel.con_h_expr = constraint.expr
 
         # dimensions
-        nx = acModel.x.size()[0]
-        nu = acModel.u.size()[0]
-        ny = nx + nu
+        nx   = acModel.x.size()[0]
+        nu   = acModel.u.size()[0]
+        ny   = nx + nu
         ny_e = nx
-        np_ = acModel.p.size()[0]
+        np_  = acModel.p.size()[0]
 
         # nsbx = 0
         # nh = constraint.expr.shape[0]
@@ -45,9 +45,9 @@ class QuadrotorOptimizer:
         # print(nh)
 
         # discretization
-        self.ocp.dims.N = N
-        self.ocp.dims.nbu = nu
-        self.ocp.dims.nbx = nx
+        self.ocp.dims.N     = N
+        self.ocp.dims.nbu   = nu
+        self.ocp.dims.nbx   = nx
         self.ocp.dims.nbx_0 = nx
         self.ocp.dims.nbx_e = nx
         # self.ocp.dims.nh = nh
@@ -60,17 +60,17 @@ class QuadrotorOptimizer:
         # Q[2,2] *=  0
         # Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.00, np.ones(4) * 0.0, np.ones(3) * 0.00)))
         R = np.eye(nu) * 1 / model.RotorSpeed_max
-        SafetyWeight = 10
+        SafetyWeight = 50
  
         # self.ocp.cost.cost_type_0 = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
         self.ocp.cost.cost_type = "EXTERNAL"
         self.ocp.cost.cost_type_e = "EXTERNAL"
 
         if self.ocp.cost.cost_type == "LINEAR_LS":
-            self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
+            self.ocp.cost.W   = scipy.linalg.block_diag(Q, R)
             self.ocp.cost.W_e = scipy.linalg.block_diag(Q)
 
-            self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(nu)))
+            self.ocp.cost.yref   = np.concatenate((model.x0, np.zeros(nu)))
             self.ocp.cost.yref_e = model.x0
 
             Vx = np.zeros((ny, nx))
@@ -123,7 +123,7 @@ class QuadrotorOptimizer:
                 for j in range(model.boxVertex.size()[1]):
                     SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
 
-            self.ocp.model.cost_expr_ext_cost = (ca.vertcat(acModel.x, acModel.u) - acModel.p[:ny]).T @ scipy.linalg.block_diag(Q, R) @ (ca.vertcat(acModel.x, acModel.u)  - acModel.p[:ny]) + SafetyCost * SafetyWeight
+            self.ocp.model.cost_expr_ext_cost   = (ca.vertcat(acModel.x, acModel.u) - acModel.p[:ny]).T @ scipy.linalg.block_diag(Q, R) @ (ca.vertcat(acModel.x, acModel.u)  - acModel.p[:ny]) + SafetyCost * SafetyWeight
             self.ocp.model.cost_expr_ext_cost_e = (acModel.x - acModel.p[:nx]).T @ Q @ (acModel.x - acModel.p[:nx]) + SafetyCost * SafetyWeight
             # print(SafetyCost)
 
@@ -142,8 +142,8 @@ class QuadrotorOptimizer:
         # self.ocp.constraints.idxbx_0 = np.array([])
 
         # bodyrate constraint
-        self.ocp.constraints.lbx = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
-        self.ocp.constraints.ubx = np.array([model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
+        self.ocp.constraints.lbx   = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
+        self.ocp.constraints.ubx   = np.array([model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
         self.ocp.constraints.idxbx = np.array(range(3)) + nx - 3
 
         # self.ocp.constraints.lbx = np.array([0, -model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
@@ -162,8 +162,8 @@ class QuadrotorOptimizer:
         # self.ocp.constraints.idxbxe_0 = np.array([])
 
         # input constraints
-        self.ocp.constraints.lbu = np.ones(nu) * model.RotorSpeed_min
-        self.ocp.constraints.ubu = np.ones(nu) * model.RotorSpeed_max
+        self.ocp.constraints.lbu   = np.ones(nu) * model.RotorSpeed_min
+        self.ocp.constraints.ubu   = np.ones(nu) * model.RotorSpeed_max
         self.ocp.constraints.idxbu = np.array(range(nu))
 
         # ocp.constraints.lsbx = np.zeros([nsbx])
@@ -193,12 +193,12 @@ class QuadrotorOptimizer:
         # ocp.constraints.idxsh = np.array(range(nsh))
 
         # set QP solver and integration
-        self.ocp.solver_options.tf = Tf
-        self.ocp.solver_options.qp_solver = "FULL_CONDENSING_HPIPM" # 'PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP'
+        self.ocp.solver_options.tf              = Tf
+        self.ocp.solver_options.qp_solver       = "FULL_CONDENSING_HPIPM" # 'PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP'
         self.ocp.solver_options.nlp_solver_type = "SQP" # SQP SQP_RTI
-        self.ocp.solver_options.hessian_approx = "GAUSS_NEWTON" # 'GAUSS_NEWTON', 'EXACT'
+        self.ocp.solver_options.hessian_approx  = "GAUSS_NEWTON" # 'GAUSS_NEWTON',                      'EXACT'
         self.ocp.solver_options.integrator_type = "ERK"
-        self.ocp.solver_options.print_level = 0
+        self.ocp.solver_options.print_level     = 0
         # self.ocp.solver_options.sim_method_num_stages = 4
         # self.ocp.solver_options.sim_method_num_steps = 3
         # self.ocp.solver_options.nlp_solver_step_length = 0.05 # default: 1

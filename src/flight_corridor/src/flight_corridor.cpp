@@ -36,9 +36,20 @@ namespace flight_corridor
     void FLIGHTCORRIDOR::execSFCCallback(const ros::TimerEvent &e){
         if (!HaveOdom_ || !HaveMap_)
             return;
+        Eigen::Vector3d start(QuadOdom_.pose.pose.position.x, QuadOdom_.pose.pose.position.y, QuadOdom_.pose.pose.position.z);
+        Eigen::Vector3i id1, id2;
+        GridMap_->posToIndex(Goal_, id1);
+        GridMap_->posToIndex(start, id2);
+        if (GridMap_->isKnownOccupied(id1) || GridMap_->isKnownOccupied(id2)){
+            if(GridMap_->isKnownOccupied(id1))
+                cout << "Goal is not collisionfree" << endl;
+            else
+                cout << "Start is not collisionfree" << endl;
+            return;
+        }
 
         double time = ros::Time::now().toSec();
-        Path_ = FLIGHTCORRIDOR::getPath(Goal_, true);
+        Path_ = FLIGHTCORRIDOR::getPath(start, Goal_, true);
         // cout << "getPath: " << ros::Time::now().toSec() - time << endl;
         decomp_util.dilate(Path_);
         auto Polyhedrons = decomp_util.get_polyhedrons();
@@ -88,8 +99,8 @@ namespace flight_corridor
         decomp_util.set_obs(DecompROS::cloud_to_vec(ObstaclePointCloud));
     }
 
-    vec_Vec3f FLIGHTCORRIDOR::getPath(Eigen::Vector3d goal, bool use_jps){
-        Eigen::Vector3d start(QuadOdom_.pose.pose.position.x, QuadOdom_.pose.pose.position.y, QuadOdom_.pose.pose.position.z);
+    vec_Vec3f FLIGHTCORRIDOR::getPath(Eigen::Vector3d start, Eigen::Vector3d goal, bool use_jps){
+        // Eigen::Vector3d start(QuadOdom_.pose.pose.position.x, QuadOdom_.pose.pose.position.y, QuadOdom_.pose.pose.position.z);
         vec_Vec3f Path;
         if(use_jps){
             Path = this->JPSPlan(start, goal);

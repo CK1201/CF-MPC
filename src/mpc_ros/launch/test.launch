@@ -24,7 +24,7 @@
     <arg name="start_y" default="0"/>
     <arg name="start_z" default="1"/>
     
-    <arg name="hover_x" default="10"/>
+    <arg name="hover_x" default="14"/>
     <arg name="hover_y" default="0"/>
     <arg name="hover_z" default="1"/>
 

@@ -7,13 +7,13 @@
     <arg name="flight_corridor/use_jps" default="true"/>
 
     <arg name="grid_map/resolution" default="0.1"/>
-    <arg name="grid_map/map_size_x" default="30.0"/>
+    <arg name="grid_map/map_size_x" default="32.0"/>
     <arg name="grid_map/map_size_y" default="6.0"/>
     <arg name="grid_map/map_size_z" default="2.5"/>
     <arg name="grid_map/local_update_range_x" default="5.5"/>
     <arg name="grid_map/local_update_range_y" default="5.5"/>
     <arg name="grid_map/local_update_range_z" default="4.5"/>
-    <arg name="grid_map/obstacles_inflation" default="0.1"/>
+    <arg name="grid_map/obstacles_inflation" default="0.2"/>
     <!-- camera parameter -->
     <arg name="grid_map/fx" default="462.1379699707031"/>
     <arg name="grid_map/fy" default="462.1379699707031"/>
