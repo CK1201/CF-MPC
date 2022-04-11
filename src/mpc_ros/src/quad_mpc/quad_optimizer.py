@@ -1,11 +1,11 @@
-from math import radians
 import os, scipy.linalg
 import numpy as np
 import casadi as ca
+from src.utils.utils import *
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 
 class QuadrotorOptimizer:
-    def __init__(self, Tf, N, quadrotorModel) -> None:
+    def __init__(self, Tf, N, quadrotorModel, cost_type) -> None:
         self.ocp = AcadosOcp()
         # acados_solver = AcadosOcpSolver(ocp)
         acados_source_path = os.environ['ACADOS_SOURCE_DIR']
@@ -22,7 +22,6 @@ class QuadrotorOptimizer:
         acModel.x           = model.x
         acModel.xdot        = model.xdot
         acModel.u           = model.u
-        acModel.p           = model.p
         # acModel.z           = model.z
         acModel.f_expl_expr = model.f_expl_expr
         acModel.f_impl_expr = model.f_impl_expr
@@ -36,7 +35,11 @@ class QuadrotorOptimizer:
         nu   = acModel.u.size()[0]
         ny   = nx + nu
         ny_e = nx
-        np_  = acModel.p.size()[0]
+        if cost_type == "EXTERNAL":
+            acModel.p = model.p
+            np_  = acModel.p.size()[0]
+            self.ocp.dims.np = np_
+            self.ocp.parameter_values = np.zeros(np_)
 
         # nsbx = 0
         # nh = constraint.expr.shape[0]
@@ -51,22 +54,13 @@ class QuadrotorOptimizer:
         self.ocp.dims.nbx_0 = nx
         self.ocp.dims.nbx_e = nx
         # self.ocp.dims.nh = nh
-        self.ocp.dims.np = np_
-        self.ocp.parameter_values = np.zeros(np_)
-        # set cost
-        # Q = np.diag(np.concatenate((np.ones(3) * 1, np.ones(3) * 0, np.ones(4) * 0, np.ones(3) * 0)))
-        Q = np.diag(np.concatenate((np.ones(3) * 1, np.ones(3) * 0.02, np.ones(4) * 0.5, np.ones(3) * 0.01)))
-        # Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
-        # Q[2,2] *=  0
-        # Q = np.diag(np.concatenate((np.ones(3) * 100, np.ones(3) * 0.00, np.ones(4) * 0.0, np.ones(3) * 0.00)))
-        R = np.eye(nu) * 1 / model.RotorSpeed_max
-        SafetyWeight = 50
- 
-        # self.ocp.cost.cost_type_0 = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
-        self.ocp.cost.cost_type = "EXTERNAL"
-        self.ocp.cost.cost_type_e = "EXTERNAL"
 
-        if self.ocp.cost.cost_type == "LINEAR_LS":
+        # self.ocp.cost.cost_type_0 = "NONLINEAR_LS" # EXTERNAL, LINEAR_LS, NONLINEAR_LS
+        self.ocp.cost.cost_type = cost_type
+        self.ocp.cost.cost_type_e = cost_type
+        if cost_type == "LINEAR_LS":
+            Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.02, np.ones(4) * 0.2, np.ones(3) * 0.01)))
+            R = np.eye(nu) * 1 / model.RotorSpeed_max
             self.ocp.cost.W   = scipy.linalg.block_diag(Q, R)
             self.ocp.cost.W_e = scipy.linalg.block_diag(Q)
 
@@ -85,49 +79,47 @@ class QuadrotorOptimizer:
             Vx_e[:nx, :nx] = np.eye(nx)
             self.ocp.cost.Vx_e = Vx_e
 
+        elif cost_type == "EXTERNAL":
+            # Q = np.diag(np.concatenate((np.ones(3) * 1, np.ones(3) * 0.02, np.ones(4) * 0.5, np.ones(3) * 0.01)))
+            Q = np.diag(np.concatenate((np.ones(3) * 200, np.ones(3) * 1, np.ones(3) * 5, np.ones(3) * 1)))
+            # Q[2,2] = 500 # z
+            Q[8,8] = 100 # yaw
+            R = np.eye(nu) * 6 / model.RotorSpeed_max
 
-        elif self.ocp.cost.cost_type == "NONLINEAR_LS":
-            self.ocp.model.cost_y_expr = ca.vertcat(acModel.x, acModel.u)
-            self.ocp.model.cost_y_expr_e = ca.vertcat(acModel.x)
+            diff_q = diff_between_q_q(acModel.x[6:10], acModel.p[6:10])[1:]
+            diff_state = ca.vertcat(acModel.x[:6] - acModel.p[:6], diff_q, acModel.x[10:13] - acModel.p[10:13])
+            diff_input = acModel.u - acModel.p[nx:ny]
 
-            self.ocp.cost.W = scipy.linalg.block_diag(Q, R)
-            self.ocp.cost.W_e = scipy.linalg.block_diag(Q)
+            # self.ocp.model.cost_expr_ext_cost = (ca.vertcat(acModel.x, acModel.u) - acModel.p[:ny]).T @ scipy.linalg.block_diag(Q, R) @ (ca.vertcat(acModel.x, acModel.u)  - acModel.p[:ny]) + SafetyCost * SafetyWeight
+            # self.ocp.model.cost_expr_ext_cost_e = (acModel.x - acModel.p[:nx]).T @ Q @ (acModel.x - acModel.p[:nx]) + SafetyCost * SafetyWeight
+            self.ocp.model.cost_expr_ext_cost = ca.vertcat(diff_state, diff_input).T @ scipy.linalg.block_diag(Q, R) @ ca.vertcat(diff_state, diff_input)
+            self.ocp.model.cost_expr_ext_cost_e = diff_state.T @ Q @ diff_state
 
-            self.ocp.cost.yref = np.concatenate((model.x0, np.zeros(nu)))
-            self.ocp.cost.yref_e = np.concatenate((model.x0))
+            if self.quadrotorModel.need_obs_free:
+                SafetyWeight = Q[2,2] * 10
+                SafetyCost = 0
+                # for i in range(model.boxVertex.size()[1]):
+                #     cost1 = 0
+                #     cost2 = 0
+                #     for j in range (model.MaxNumOfPolyhedrons):
+                #         APolyhedron = acModel.p[ny + j * 4: ny + j * 4 + 3]
+                #         bPolyhedron = acModel.p[ny + j * 4 + 3]
+                #         cost1 += self.LossFunction(APolyhedron.T @ model.boxVertex[:,i] - bPolyhedron)
+                #         APolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4: ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
+                #         bPolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
+                #         cost2 += self.LossFunction(APolyhedron2.T @ model.boxVertex[:,i] - bPolyhedron2)
+                #     # inside 1 corridor
+                #     SafetyCost += cost1
+                #     # inside either 2 corridor
+                #     # SafetyCost += ca.fmin(cost1, cost2)
 
-
-        elif self.ocp.cost.cost_type == "EXTERNAL":
-            SafetyCost = 0
-
-            
-            # for i in range(model.boxVertex.size()[1]):
-            #     cost1 = 0
-            #     cost2 = 0
-            #     for j in range (model.MaxNumOfPolyhedrons):
-            #         APolyhedron = acModel.p[ny + j * 4: ny + j * 4 + 3]
-            #         bPolyhedron = acModel.p[ny + j * 4 + 3]
-            #         cost1 += self.LossFunction(APolyhedron.T @ model.boxVertex[:,i] - bPolyhedron)
-            #         APolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4: ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
-            #         bPolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
-            #         cost2 += self.LossFunction(APolyhedron2.T @ model.boxVertex[:,i] - bPolyhedron2)
-            #     # inside 1 corridor
-            #     SafetyCost += cost1
-            #     # inside either 2 corridor
-            #     # SafetyCost += ca.fmin(cost1, cost2)
-
-            
-            for i in range (model.MaxNumOfPolyhedrons):
-                APolyhedron = acModel.p[ny + i * 4: ny + i * 4 + 3]
-                bPolyhedron = acModel.p[ny + i * 4 + 3]
-                for j in range(model.boxVertex.size()[1]):
-                    SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
-
-            self.ocp.model.cost_expr_ext_cost   = (ca.vertcat(acModel.x, acModel.u) - acModel.p[:ny]).T @ scipy.linalg.block_diag(Q, R) @ (ca.vertcat(acModel.x, acModel.u)  - acModel.p[:ny]) + SafetyCost * SafetyWeight
-            self.ocp.model.cost_expr_ext_cost_e = (acModel.x - acModel.p[:nx]).T @ Q @ (acModel.x - acModel.p[:nx]) + SafetyCost * SafetyWeight
-            # print(SafetyCost)
-
-
+                for i in range (model.MaxNumOfPolyhedrons):
+                    APolyhedron = acModel.p[ny + i * 4: ny + i * 4 + 3]
+                    bPolyhedron = acModel.p[ny + i * 4 + 3]
+                    for j in range(model.boxVertex.size()[1]):
+                        SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
+                self.ocp.model.cost_expr_ext_cost += SafetyCost * SafetyWeight
+                self.ocp.model.cost_expr_ext_cost_e += SafetyCost * SafetyWeight
 
         # set intial condition
         self.ocp.constraints.x0 = model.x0
@@ -145,14 +137,6 @@ class QuadrotorOptimizer:
         self.ocp.constraints.lbx   = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
         self.ocp.constraints.ubx   = np.array([model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
         self.ocp.constraints.idxbx = np.array(range(3)) + nx - 3
-
-        # self.ocp.constraints.lbx = np.array([0, -model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
-        # self.ocp.constraints.ubx = np.array([99999, model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
-        # self.ocp.constraints.idxbx = np.concatenate((np.array([2]), np.array(range(3)) + nx - 3))
-        # temp = np.array(range(4))
-        # temp[0] = 2
-        # temp[1:] = temp[1:] + nx - 3
-        # self.ocp.constraints.idxbx = temp
 
         # self.ocp.constraints.lbx_e = np.array([-model.BodyratesX, -model.BodyratesY, -model.BodyratesZ])
         # self.ocp.constraints.ubx_e = np.array([ model.BodyratesX,  model.BodyratesY,  model.BodyratesZ])
@@ -172,20 +156,10 @@ class QuadrotorOptimizer:
 
         # self.ocp.constraints.lh = np.array(
         #     [
-        #         constraint.along_min,
-        #         constraint.alat_min,
-        #         model.n_min,
-        #         model.throttle_min,
-        #         model.delta_min,
         #     ]
         # )
         # self.ocp.constraints.uh = np.array(
         #     [
-        #         constraint.along_max,
-        #         constraint.alat_max,
-        #         model.n_max,
-        #         model.throttle_max,
-        #         model.delta_max,
         #     ]
         # )
         # ocp.constraints.lsh = np.zeros(nsh)

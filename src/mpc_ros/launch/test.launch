@@ -2,10 +2,13 @@
     <arg name="mav_name" default="hummingbird"/>
     <arg name="with_drag" default="true"/>
     <arg name="fit_param" default="false"/>
+    <arg name="use_LFS1_or_NM2" default="1"/>
+    <arg name="cost_type" default="EXTERNAL"/>
+    <arg name="need_obs_free" default="false"/>
     <arg name="experiment_time" default="38"/>
     <arg name="experiment_times" default="4"/>
     <arg name="plot" default="false"/>
-    <arg name="use_prior" default="false"/>
+    <arg name="use_prior" default="true"/>
     <arg name="use_jps" default="true"/>
     
     <!-- <arg name="expriment" default="circle_speedup"/>
@@ -24,22 +27,23 @@
     <arg name="start_y" default="0"/>
     <arg name="start_z" default="1"/>
     
-    <arg name="hover_x" default="14"/>
+    <arg name="hover_x" default="0"/>
     <arg name="hover_y" default="0"/>
-    <arg name="hover_z" default="1"/>
+    <arg name="hover_z" default="5"/>
 
     <!-- circle
     circle_speedup
     hover 
     lemniscate
     lemniscate_speedup -->
-
-    <include file="$(find flight_corridor)/launch/flight_corridor.launch">
-        <arg name="flight_corridor/goal_x" value="$(arg hover_x)"/>
-        <arg name="flight_corridor/goal_y" value="$(arg hover_y)"/>
-        <arg name="flight_corridor/goal_z" value="$(arg hover_z)"/>
-        <arg name="flight_corridor/use_jps" value="$(arg use_jps)"/>
-    </include>
+    <group if="$(arg need_obs_free)">
+        <include file="$(find flight_corridor)/launch/flight_corridor.launch">
+            <arg name="flight_corridor/goal_x" value="$(arg hover_x)"/>
+            <arg name="flight_corridor/goal_y" value="$(arg hover_y)"/>
+            <arg name="flight_corridor/goal_z" value="$(arg hover_z)"/>
+            <arg name="flight_corridor/use_jps" value="$(arg use_jps)"/>
+        </include>
+    </group>
 
     <node pkg="mpc_ros" type="mpc_node.py" name="mpc_node" output="screen">
         <param name="quad_name" value="$(arg mav_name)"/>
@@ -55,6 +59,9 @@
         <param name="start_z" value="$(arg start_z)"/>
         <param name="plot" value="$(arg plot)"/>
         <param name="fit_param" value="$(arg fit_param)"/>
+        <param name="use_LFS1_or_NM2" value="$(arg use_LFS1_or_NM2)"/>
+        <param name="cost_type" value="$(arg cost_type)"/>
+        <param name="need_obs_free" value="$(arg need_obs_free)"/>
         <param name="use_prior" value="$(arg use_prior)"/>
     </node>
 

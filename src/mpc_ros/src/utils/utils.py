@@ -46,12 +46,29 @@ def v_dot_q(v, q):
     return ca.mtimes(rot_mat, v)
 
 def quaternion_inverse(q):
+    # q = unit_quat(q)
     w, x, y, z = q[0], q[1], q[2], q[3]
-
     if isinstance(q, np.ndarray):
         return np.array([w, -x, -y, -z])
     else:
         return ca.vertcat(w, -x, -y, -z)
+
+def q_dot_q(q, r):
+    qw, qx, qy, qz = q[0], q[1], q[2], q[3]
+    rw, rx, ry, rz = r[0], r[1], r[2], r[3]
+
+    t0 = rw * qw - rx * qx - ry * qy - rz * qz
+    t1 = rw * qx + rx * qw - ry * qz + rz * qy
+    t2 = rw * qy + rx * qz + ry * qw - rz * qx
+    t3 = rw * qz - rx * qy + ry * qx + rz * qw
+
+    if isinstance(q, np.ndarray):
+        return np.array([t0, t1, t2, t3])
+    else:
+        return ca.vertcat(t0, t1, t2, t3)
+
+def diff_between_q_q(q, r):
+    return q_dot_q(q, quaternion_inverse(r))
 
 def quat_to_rotation_matrix(quaternions):
     q0, q1, q2, q3 = quaternions[0], quaternions[1], quaternions[2], quaternions[3]

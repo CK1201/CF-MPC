@@ -4,7 +4,7 @@ import numpy as np
 from src.utils.utils import *
 
 class QuadrotorModel:
-    def __init__(self, quad_name = 'hummingbird', configuration = '+', Drag_D = np.zeros((3, 3)), Drag_kh = 0, Drag_A = np.zeros((3, 3)), Drag_B = np.zeros((3, 3))) -> None:
+    def __init__(self, quad_name = 'hummingbird', configuration = '+', Drag_D = np.zeros((3, 3)), Drag_kh = 0, Drag_A = np.zeros((3, 3)), Drag_B = np.zeros((3, 3)), need_obs_free = False) -> None:
 
         this_path = os.path.dirname(os.path.realpath(__file__))
         params_file = os.path.join(this_path, '..', '..', 'xacro', quad_name + '.xacro')
@@ -30,6 +30,7 @@ class QuadrotorModel:
         self.kh = Drag_kh
         self.A = Drag_A
         self.B = Drag_B
+        self.need_obs_free = need_obs_free
         self.Inertia = np.array([
             [float(attrib['body_inertia'][0]['ixx']), float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['ixz'])],
             [float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['iyy']), float(attrib['body_inertia'][0]['iyz'])],
@@ -68,13 +69,13 @@ class QuadrotorModel:
         quad_length = self.arm_length + self.radius_rotor
         height = self.body_height / 2
         self.model.boxVertexNp = np.array([[quad_length, 0, -height],
-                              [quad_length, 0, height],
-                              [-quad_length, 0, -height],
-                              [-quad_length, 0, height],
-                              [0, quad_length, -height],
-                              [0, quad_length, height],
-                              [0, -quad_length, -height],
-                              [0, -quad_length, height]])
+                            [quad_length, 0, height],
+                            [-quad_length, 0, -height],
+                            [-quad_length, 0, height],
+                            [0, quad_length, -height],
+                            [0, quad_length, height],
+                            [0, -quad_length, -height],
+                            [0, -quad_length, height]])
         self.model.boxVertex = ca.SX.zeros(3, 8)
         # Rotation = ca.SX.sym("Rotation", 3, 3)
         for i in range (len(self.model.boxVertexNp)):
@@ -101,7 +102,10 @@ class QuadrotorModel:
         # z = ca.vertcat([])
 
         # parameters
-        self.model.MaxNumOfPolyhedrons = 10
+        if self.need_obs_free:
+            self.model.MaxNumOfPolyhedrons = 10
+        else:
+            self.model.MaxNumOfPolyhedrons = 0
         param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
         # param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4 * 2, 1)
 
@@ -135,13 +139,10 @@ class QuadrotorModel:
         self.model.xdot = xdot
         self.model.u = RotorSpeed
         self.model.p = param
-        # self.model.z = z
         self.model.f_expl_expr = f_expl
         self.model.f_impl_expr = xdot - f_expl
         self.model.con_h_expr = con_h
-        # self.model.params = params
         self.model.x0 = np.concatenate((np.zeros(6), np.array([1, 0, 0, 0]), np.zeros(3)))
-        # self.model.x0 = np.concatenate((np.zeros(6), flatten(np.eye(3)), np.zeros(3)),axis=0)
         # Model bounds
 
         # state bounds

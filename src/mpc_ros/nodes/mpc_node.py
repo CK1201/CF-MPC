@@ -1,4 +1,5 @@
 #!/usr/bin/env python3.6
+from math import sqrt, pi
 import rospy, std_msgs.msg, message_filters, os, yaml
 import numpy as np
 from std_msgs.msg import Bool
@@ -57,7 +58,17 @@ class QuadMPC:
         self.hover_point[2] = rospy.get_param('~hover_z', default='2')
         plot = rospy.get_param('~plot', default='true')
         self.havenot_fit_param = rospy.get_param('~fit_param', default='true')
+        self.use_LFS1_or_NM2 = rospy.get_param('~use_LFS1_or_NM2', default='1')
+        self.cost_type = rospy.get_param('~cost_type', default='LINEAR_LS')
+        self.need_obs_free = rospy.get_param('~need_obs_free', default='false')
         self.use_prior = rospy.get_param('~use_prior', default='true')
+
+        if self.cost_type == "LINEAR_LS" and self.need_obs_free:
+            rospy.logwarn("cost type: LINEAR_LS can not be obs free!!! set cost type as EXTERNAL.")
+            rospy.logwarn("cost type: LINEAR_LS can not be obs free!!! set cost type as EXTERNAL.")
+            rospy.logwarn("cost type: LINEAR_LS can not be obs free!!! set cost type as EXTERNAL.")
+            self.cost_type = "EXTERNAL"
+
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps'
         if self.havenot_fit_param:
@@ -110,7 +121,8 @@ class QuadMPC:
                 Drag_B = np.zeros((3, 3))
         print(Drag_D)
         # load model
-        self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh, Drag_A=Drag_A, Drag_B=Drag_B))
+        self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh, Drag_A=Drag_A, Drag_B=Drag_B, need_obs_free=self.need_obs_free), cost_type=self.cost_type)
+
         # Subscribers
         self.quad_vis_pub = rospy.Publisher('/' + quad_name + '/quad_odom', Marker, queue_size=1, tcp_nodelay=True)
         self.quad_box_vis_pub = rospy.Publisher('/' + quad_name + '/quad_box', Marker, queue_size=1, tcp_nodelay=True)
@@ -118,8 +130,6 @@ class QuadMPC:
         self.trigger_sub = rospy.Subscriber('/' + quad_name + '/trigger', std_msgs.msg.Empty, self.trigger_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
-        self.PolyhedronArray_sub = rospy.Subscriber('/flight_corridor_node/polyhedron_array', PolyhedronArray, self.PolyhedronArray_callback)
-        self.path_sub_ = rospy.Subscriber('/flight_corridor_node/path', Path, self.path_callback)
         
         # message filter
         self.imu_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/imu', Imu)
@@ -139,10 +149,13 @@ class QuadMPC:
         # self.control_vel_pub = rospy.Publisher('/' + quad_name + '/autopilot/velocity_command', TwistStamped, queue_size=1, tcp_nodelay=True)
         # self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.ap_control_cmd_pub = rospy.Publisher('/' + quad_name + '/autopilot/control_command_input', ControlCommand, queue_size=1, tcp_nodelay=True)
-        self.polyhedron_array_in_use_pub = rospy.Publisher('/' + quad_name + '/polyhedron_array_in_use_pub', PolyhedronArray, queue_size=1, tcp_nodelay=True)
-        self.path_in_use_pub = rospy.Publisher('/' + quad_name + '/path_in_use_pub', Path, queue_size=1, tcp_nodelay=True)
         self.traj_vis_pub = rospy.Publisher('/' + quad_name + '/quad_traj', Marker, queue_size=1, tcp_nodelay=True)
 
+        if self.need_obs_free:
+            self.PolyhedronArray_sub = rospy.Subscriber('/flight_corridor_node/polyhedron_array', PolyhedronArray, self.PolyhedronArray_callback)
+            self.path_sub_ = rospy.Subscriber('/flight_corridor_node/path', Path, self.path_callback)
+            self.polyhedron_array_in_use_pub = rospy.Publisher('/' + quad_name + '/polyhedron_array_in_use_pub', PolyhedronArray, queue_size=1, tcp_nodelay=True)
+            self.path_in_use_pub = rospy.Publisher('/' + quad_name + '/path_in_use_pub', Path, queue_size=1, tcp_nodelay=True)
         
         # Trying to unpause Gazebo for 10 seconds.
         rospy.wait_for_service('/gazebo/unpause_physics')
@@ -150,11 +163,10 @@ class QuadMPC:
         unpaused = unpause_gazebo.call()
 
         if plot:
-            self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=0.1, t_horizon=35, N_node=350, model=self.quadrotorOptimizer.quadrotorModel, plot=True)
+            self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=0.1, t_horizon=35, N_node=350, velocity=10, model=self.quadrotorOptimizer.quadrotorModel, plot=True)
             return
 
         i = 0
-        # rospy.loginfo("11Unpaused the Gazebo simulation.")
         while (i <= 10 and not(unpaused)):
             i += 1
             rospy.sleep(1.0)
@@ -164,7 +176,6 @@ class QuadMPC:
             rospy.signal_shutdown("Could not wake up Gazebo.")
         else:
             rospy.loginfo("Unpaused the Gazebo simulation.")
-        # rospy.loginfo("22Unpaused the Gazebo simulation.")
         rospy.sleep(1.0)
 
         arm = Bool()
@@ -345,8 +356,10 @@ class QuadMPC:
         self.begin_time = rospy.Time.now().to_sec()
         self.experiment_times_current = 0
         self.pose_error = np.zeros(self.experiment_times)
+        self.pose_error_square = np.zeros(self.experiment_times)
         self.pose_error_max = np.zeros(self.experiment_times)
         self.pose_error_mean = np.zeros(self.experiment_times)
+        self.pose_error_rmse = np.zeros(self.experiment_times)
         self.max_v_w = np.zeros(self.experiment_times)
         self.max_motor_speed = np.zeros(self.experiment_times)
         self.reach_times = 0
@@ -412,19 +425,21 @@ class QuadMPC:
                     self.start_record = True
                     self.start_record_time = rospy.Time.now().to_sec()
                     self.have_reach_start_point_cmd = False
-                    self.polyhedrons = self.PolyhedronArray.polyhedrons
-                    self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
-                    self.path_in_use_pub.publish(self.Path)
-                    self.max_select = 0
+                    if self.need_obs_free:
+                        self.polyhedrons = self.PolyhedronArray.polyhedrons
+                        self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
+                        self.path_in_use_pub.publish(self.Path)
+                        self.max_select = 0
                     print("arrive start point")
             return
         elif (not self.finish_tracking):
-            p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, model=self.quadrotorOptimizer.quadrotorModel, plot=False)
+            p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, velocity=1000, model=self.quadrotorOptimizer.quadrotorModel, plot=False)
             error_pose = np.linalg.norm(np.array(self.p) - p[0])
             error_vel  = np.linalg.norm(np.array(self.v_w) - v[0])
             error_q    = np.linalg.norm(np.array(self.q) - q[0])
             error_br   = np.linalg.norm(np.array(self.w) - br[0])
             self.pose_error[self.experiment_times_current] += error_pose
+            self.pose_error_square[self.experiment_times_current] += error_pose ** 2
             self.pose_error_num += 1
             self.pose_error_max[self.experiment_times_current] = max(self.pose_error_max[self.experiment_times_current], error_pose)
             if self.expriment == 'hover':
@@ -439,9 +454,11 @@ class QuadMPC:
             self.trigger = False
             self.reach_start_point = False
             self.pose_error_mean[self.experiment_times_current] = self.pose_error[self.experiment_times_current] / self.pose_error_num
+            self.pose_error_rmse[self.experiment_times_current] = sqrt(self.pose_error_square[self.experiment_times_current] / self.pose_error_num)
             self.pose_error_num = 0
             print("max error : ", self.pose_error_max[self.experiment_times_current])
             print("mean error: ", self.pose_error_mean[self.experiment_times_current])
+            print("rmse      : ", self.pose_error_rmse[self.experiment_times_current])
             print("max v_w   : ", self.max_v_w[self.experiment_times_current])
             print("max motor :  {:.2f}, {:.2f}%".format(self.max_motor_speed[self.experiment_times_current], self.max_motor_speed[self.experiment_times_current] / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max * 100))
             return
@@ -449,7 +466,7 @@ class QuadMPC:
         self.runMPC(p=p, v=v, q=q, br=br, u=u, error_pose=error_pose, error_vel=error_vel, useTwoPolyhedron=False, selectStrategy=1)
         return
 
-    def getReference(self, experiment, start_point, hover_point, time_now, t_horizon, N_node, model, plot):
+    def getReference(self, experiment, start_point, hover_point, time_now, t_horizon, N_node, velocity, model, plot):
         if start_point is None:
             start_point = np.array([5, 0, 5])
         if abs(self.start_point[0]) < 0.1:
@@ -468,7 +485,6 @@ class QuadMPC:
         dt = t[1] - t[0]
         
         if experiment == 'hover':
-            velocity = 0.5 # m/s
             timeAll = np.linalg.norm((hover_point - start_point)) / velocity
             temp_t = np.concatenate((t[np.newaxis,:] / timeAll, np.ones((1, N_node + 1))), axis=0)
             temp_t = temp_t.min(0)[:,np.newaxis]
@@ -479,7 +495,8 @@ class QuadMPC:
             # p[:, 0] = temp[0]
             # p[:, 1] = temp[1]
             # p[:, 2] = temp[2]
-            yaw[:, 0] = 0
+            # p = np.repeat(hover_point[np.newaxis,:], repeats=N_node + 1, axis=0)
+            yaw[:, 0] = pi
             # print(p)
 
         elif experiment == 'circle':
@@ -801,7 +818,7 @@ class QuadMPC:
     def setReference(self, p, v, q, br, u, useTwoPolyhedron, selectStrategy):
         self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
         self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
-        if self.quadrotorOptimizer.ocp.cost.cost_type == "EXTERNAL" or self.quadrotorOptimizer.ocp.cost.cost_type_e == "EXTERNAL":
+        if self.need_obs_free:
             paramPolyhedron = self.getPolyhedronParam(useTwoPolyhedron=useTwoPolyhedron, selectStrategy=selectStrategy)
         for i in range(self.N):
             yref = np.concatenate((p[i], v[i], q[i], br[i], u[i]))
@@ -810,20 +827,19 @@ class QuadMPC:
                 # self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
                 # self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
                 # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
-            elif self.quadrotorOptimizer.ocp.cost.cost_type == "NONLINEAR_LS":
-                self.quadrotorOptimizer.acados_solver.set(i, 'yref', yref)
-                # self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
             elif self.quadrotorOptimizer.ocp.cost.cost_type == "EXTERNAL":
-                param = np.concatenate((yref, paramPolyhedron))
+                param = yref
+                if self.need_obs_free:
+                    param = np.concatenate((param, paramPolyhedron))
                 self.quadrotorOptimizer.acados_solver.set(i, 'p', param)
 
         xref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N]))
         if self.quadrotorOptimizer.ocp.cost.cost_type_e == "LINEAR_LS":
             self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
-        elif self.quadrotorOptimizer.ocp.cost.cost_type_e == "NONLINEAR_LS":
-            self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
         elif self.quadrotorOptimizer.ocp.cost.cost_type_e == "EXTERNAL":
-            param = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.quadrotorModel.model.u.size()[0]), paramPolyhedron))
+            param = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.quadrotorModel.model.u.size()[0])))
+            if self.need_obs_free:
+                param = np.concatenate((param, paramPolyhedron))
             self.quadrotorOptimizer.acados_solver.set(self.N, 'p', param)
         
     def getPolyhedronParam(self, useTwoPolyhedron, selectStrategy):
@@ -938,6 +954,9 @@ class QuadMPC:
             point.z = temp[2]
             traj.points.append(point)
         self.traj_vis_pub.publish(traj)
+
+    def NelderMead(self):
+        return
 
     def Simulation(self, x_data, motor_data, t):
         model = self.quadrotorOptimizer.quadrotorModel
