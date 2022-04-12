@@ -1,6 +1,3 @@
-import imp
-
-
 import numpy as np
 # a = np.arange(12).reshape((4,3))
 # print(a)
@@ -22,5 +19,50 @@ import numpy as np
 # print(dp * a)
 
 
-for i in range(0):
-    print(i+1)
+
+
+
+fit_size = 5
+A = np.zeros((fit_size,3,3))
+B = np.zeros((fit_size,3,3))
+D = np.zeros((fit_size,3,3))
+A_coeff = np.random.rand(fit_size,2) * 0.01
+B_coeff = np.random.rand(fit_size,3) * 0.01
+D_coeff = np.random.rand(fit_size,3) * 0.2
+D_coeff[:,2] = D_coeff[:,2] * 0.1
+kh = np.random.rand(fit_size,1) * 0.01
+for i in range(fit_size):
+    A[i, 0, 1] = A_coeff[i, 0]
+    A[i, 1, 0] = A_coeff[i, 1]
+    B[i] = np.diag(B_coeff[i])
+    D[i] = np.diag(D_coeff[i])
+np.savez('../../config/Drag_coeff.npz',A=A,B=B,D=D,kh=kh)
+ 
+# Drag = np.load('../../config/Drag_coeff.npz')
+# print(Drag['A'])
+# print(Drag['B'])
+# print(Drag['D'])
+# print(Drag['kh'])
+# print(np.diag(Drag['B'][0]))
+# print(np.diag(Drag['D'][0]))
+# D_ax: -0.0010074589818424833
+# D_ay: 0.0008514445780673497
+# D_bx: -0.0007469443535864694
+# D_by: -0.0019832280422668073
+# D_bz: -0.0020781549801982503
+# D_dx: 0.1743045615872555
+# D_dy: 0.16908576711100184
+# D_dz: 0.01851075588266621
+# kh: 0.003518680371287564
+
+
+# a1 = np.array([[0],[2],[3]])
+# a2 = np.array([[1],[1],[4]])
+# a = np.concatenate((a1[:,0][:,np.newaxis],a2[:,0][:,np.newaxis]),axis=1)
+# print(a)
+# print(np.min(a,axis=1))
+
+
+
+
+# print(np.mean(np.random.rand(10,3,3), axis=0))

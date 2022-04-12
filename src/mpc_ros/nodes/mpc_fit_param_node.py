@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.6
 from math import sqrt, pi
+from xmlrpc.client import TRANSPORT_ERROR
 import rospy, std_msgs.msg, message_filters, os, yaml
 import numpy as np
 from std_msgs.msg import Bool
@@ -15,39 +16,12 @@ from src.quad_mpc.quad_optimizer import QuadrotorOptimizer
 from src.quad_mpc.quad_model import QuadrotorModel
 from decomp_ros_msgs.msg import PolyhedronArray
 
-'''
-RotorS
-/hummingbird/command/motor_speed
-/hummingbird/command/pose
-/hummingbird/command/trajectory
-/hummingbird/gazebo/command/motor_speed
-/hummingbird/wind_speed
-
-/hummingbird/autopilot/control_command_input
-/hummingbird/autopilot/feedback
-/hummingbird/autopilot/force_hover
-/hummingbird/autopilot/land
-/hummingbird/autopilot/off
-/hummingbird/autopilot/pose_command
-/hummingbird/autopilot/reference_state
-/hummingbird/autopilot/start
-/hummingbird/autopilot/trajectory
-/hummingbird/autopilot/velocity_command
-/hummingbird/bridge/arm
-/hummingbird/command/motor_speed
-/hummingbird/control_command
-/hummingbird/gazebo/command/motor_speed
-/hummingbird/received_sbus_message
-/hummingbird/wind_speed
-'''
 class QuadMPC:
     def __init__(self, t_horizon = 1, N = 10) -> None:
         rospy.init_node("mpc_node")
         quad_name = rospy.get_param('~quad_name', default='hummingbird')
-        self.with_drag = rospy.get_param('~with_drag', default='false')
         self.expriment = rospy.get_param('~expriment', default='hover')
-        self.experiment_time = rospy.get_param('~experiment_time', default='35')
-        self.experiment_times = rospy.get_param('~experiment_times', default='1')
+        self.experiment_time = rospy.get_param('~experiment_time', default='20')
         self.start_point = np.zeros(3)
         self.hover_point = np.zeros(3)
         self.start_point[0] = rospy.get_param('~start_x', default='0')
@@ -57,30 +31,16 @@ class QuadMPC:
         self.hover_point[1] = rospy.get_param('~hover_y', default='0')
         self.hover_point[2] = rospy.get_param('~hover_z', default='2')
         self.vel = rospy.get_param('~max_vel', default='0.1')
+        self.heading = rospy.get_param('~heading', default='false')
         plot = rospy.get_param('~plot', default='true')
-        self.need_fit_param = rospy.get_param('~fit_param', default='true')
         self.fit_method = rospy.get_param('~fit_method', default='LFS')
-        self.cost_type = rospy.get_param('~cost_type', default='LINEAR_LS')
-        self.need_obs_free = rospy.get_param('~need_obs_free', default='false')
-        self.use_prior = rospy.get_param('~use_prior', default='true')
-
-        if self.cost_type == "LINEAR_LS" and self.need_obs_free:
-            rospy.logwarn("cost type: LINEAR_LS can not be obs free!!! set cost type as EXTERNAL.")
-            rospy.logwarn("cost type: LINEAR_LS can not be obs free!!! set cost type as EXTERNAL.")
-            rospy.logwarn("cost type: LINEAR_LS can not be obs free!!! set cost type as EXTERNAL.")
-            self.cost_type = "EXTERNAL"
+        self.cost_type = rospy.get_param('~cost_type', default='EXTERNAL')
 
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps'
-        if self.need_fit_param:
-            if self.fit_method == "LFS":
-                self.experiment_time = 40
-                self.experiment_times = 1
-                self.record_time = self.experiment_time + 10
-            elif self.fit_method == "NM":
-                print("todo")
         self.pose_error_num = 0
         self.print_cnt = 0
+        self.experiment_times_current = 0
         self.a_data = None
 
         self.have_odom = False
@@ -89,9 +49,9 @@ class QuadMPC:
         self.have_polyhedron = False
         self.trigger = False
         self.reach_start_point = False
-        # self.start_record_fit_data = True
         self.start_record = False
         self.finish_tracking = False
+        self.cal_type = "all"
         
         # load Drag coefficient
         dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -100,35 +60,40 @@ class QuadMPC:
         # mesh_dir = dir_path + '/../mesh'
         self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
         self.yaml_file = os.path.join(config_dir, quad_name + '.yaml')
+        self.drag_file = os.path.join(config_dir, 'Drag_coeff' + '.npz')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
         self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
-        Drag_A = np.zeros((3, 3))
-        if self.need_fit_param or not(self.with_drag):
-            if self.fit_method == "LFS" or not(self.with_drag):
-                Drag_D = np.zeros((3, 3))
-                Drag_kh = 0
-                Drag_B = np.zeros((3, 3))
-            elif self.fit_method == "NM":
-                print("todo")
-        else:
-            try:
-                with open(self.yaml_file) as file:
-                    config = yaml.load(file)
-                    Drag_D = np.diag([config["D_dx"], config["D_dy"], config["D_dz"]])
-                    Drag_kh = config["kh"]
-                    Drag_A[0, 1] = config["D_ax"]
-                    Drag_A[1, 0] = config["D_ay"]
-                    Drag_B = np.diag([config["D_bx"], config["D_by"], config["D_bz"]])
-                    self.result_file = os.path.join(result_dir, self.expriment + '_with_drag.txt')
-            except FileNotFoundError:
-                warn_msg = "Tried to load Drag coefficient but the file was not found. Using default Drag coefficient."
-                rospy.logwarn(warn_msg)
-                Drag_D = np.zeros((3, 3))
-                Drag_kh = 0
-                Drag_B = np.zeros((3, 3))
-        print(Drag_D)
+        if self.fit_method == "LFS":
+            # message filter
+            self.imu_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/imu', Imu)
+            self.odom_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry)
+            self.motor_sub_filter = message_filters.Subscriber('/' + quad_name + '/motor_speed', Actuators)
+            self.TimeSynchronizer = message_filters.TimeSynchronizer([self.imu_sub_filter, self.odom_sub_filter, self.motor_sub_filter], 10)
+            # message_filters.ApproximateTimeSynchronizer
+            self.TimeSynchronizer.registerCallback(self.TimeSynchronizer_callback)
+            self.x_data = np.array([])
+
+            self.fit_size = 1
+            self.Drag_D = np.zeros((self.fit_size, 3, 3))
+            self.Drag_kh = np.zeros((self.fit_size, 1))
+            self.Drag_A = np.zeros((self.fit_size, 3, 3))
+            self.Drag_B = np.zeros((self.fit_size, 3, 3))
+            # self.experiment_time = 40
+        elif self.fit_method == "NM":
+            Drag = np.load(self.drag_file)
+            self.Drag_D = Drag['D']
+            self.Drag_kh = Drag['kh']
+            self.Drag_A = Drag['A']
+            self.Drag_B = Drag['B']
+            self.fit_size = len(self.Drag_D)
+
+        self.experiment_times = self.fit_size
+            
+        
         # load model
-        self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh, Drag_A=Drag_A, Drag_B=Drag_B, need_obs_free=self.need_obs_free), cost_type=self.cost_type)
+        self.quadrotorOptimizer = []
+        for i in range(self.fit_size):
+            self.quadrotorOptimizer.append(QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=self.Drag_D[i], Drag_kh=self.Drag_kh[i], Drag_A=self.Drag_A[i], Drag_B=self.Drag_B[i], need_obs_free=False), cost_type=self.cost_type, num=i))
 
         # Subscribers
         self.quad_vis_pub = rospy.Publisher('/' + quad_name + '/quad_odom', Marker, queue_size=1, tcp_nodelay=True)
@@ -136,16 +101,7 @@ class QuadMPC:
         self.odom_sub = rospy.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry, self.odom_callback)
         self.trigger_sub = rospy.Subscriber('/' + quad_name + '/trigger', std_msgs.msg.Empty, self.trigger_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
-        self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
         
-        # message filter
-        self.imu_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/imu', Imu)
-        self.odom_sub_filter = message_filters.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry)
-        self.motor_sub_filter = message_filters.Subscriber('/' + quad_name + '/motor_speed', Actuators)
-        self.TimeSynchronizer = message_filters.TimeSynchronizer([self.imu_sub_filter, self.odom_sub_filter, self.motor_sub_filter], 10)
-        # message_filters.ApproximateTimeSynchronizer
-        self.TimeSynchronizer.registerCallback(self.TimeSynchronizer_callback)
-        self.x_data = np.array([])
         # Publishers
         self.arm_pub = rospy.Publisher('/' + quad_name + '/bridge/arm', Bool, queue_size=1, tcp_nodelay=True)
         self.start_autopilot_pub = rospy.Publisher('/' + quad_name + '/autopilot/start', std_msgs.msg.Empty, queue_size=1, tcp_nodelay=True)
@@ -157,21 +113,15 @@ class QuadMPC:
         # self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.ap_control_cmd_pub = rospy.Publisher('/' + quad_name + '/autopilot/control_command_input', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.traj_vis_pub = rospy.Publisher('/' + quad_name + '/quad_traj', Marker, queue_size=1, tcp_nodelay=True)
-
-        if self.need_obs_free:
-            self.PolyhedronArray_sub = rospy.Subscriber('/flight_corridor_node/polyhedron_array', PolyhedronArray, self.PolyhedronArray_callback)
-            self.path_sub_ = rospy.Subscriber('/flight_corridor_node/path', Path, self.path_callback)
-            self.polyhedron_array_in_use_pub = rospy.Publisher('/' + quad_name + '/polyhedron_array_in_use_pub', PolyhedronArray, queue_size=1, tcp_nodelay=True)
-            self.path_in_use_pub = rospy.Publisher('/' + quad_name + '/path_in_use_pub', Path, queue_size=1, tcp_nodelay=True)
         
         # Trying to unpause Gazebo for 10 seconds.
         rospy.wait_for_service('/gazebo/unpause_physics')
         unpause_gazebo = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
         unpaused = unpause_gazebo.call()
 
-        if plot:
-            self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=0.1, t_horizon=35, N_node=350, velocity=10, model=self.quadrotorOptimizer.quadrotorModel, plot=True)
-            return
+        # if plot:
+        #     self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=0.1, t_horizon=35, N_node=350, velocity=10, model=self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel, plot=True)
+        #     return
 
         i = 0
         while (i <= 10 and not(unpaused)):
@@ -208,11 +158,13 @@ class QuadMPC:
             if self.finish_tracking:
                 # x_sim = self.Simulation(self.x_data, self.motor_data, self.t_data - self.begin_time)
                 # draw_data_sim(self.x_data, x_sim, self.motor_data, self.t_data - self.begin_time)
-                rospy.sleep(3.0)
+                rospy.sleep(2.0)
                 if self.pose_error_max[self.experiment_times_current] > 2:
                     self.pose_error[self.experiment_times_current] = 0
+                    self.pose_error_square[self.experiment_times_current] = 0
                     self.pose_error_max[self.experiment_times_current] = 0
                     self.pose_error_mean[self.experiment_times_current] = 0
+                    self.pose_error_rmse[self.experiment_times_current] = 0
                     self.max_v_w[self.experiment_times_current] = 0
                     self.max_motor_speed[self.experiment_times_current] = 0
                     self.experiment_times_current -= 1
@@ -221,62 +173,162 @@ class QuadMPC:
 
                 if (self.experiment_times_current < self.experiment_times):
                     self.trigger = True
-                    self.begin_time = rospy.Time.now().to_sec()
+                    # self.begin_time = rospy.Time.now().to_sec()
                 else:
-                    print("max error : ", self.pose_error_max)
+                    print("max  error: ", self.pose_error_max)
                     print("mean error: ", self.pose_error_mean)
-                    print("max v_w   : ", self.max_v_w)
-                    print("max motor : ", self.max_motor_speed)
+                    print("rmse error: ", self.pose_error_rmse)
+                    print("max  v_w  : ", self.max_v_w)
+                    # print("max  motor: ", self.max_motor_speed)
+                    self.experiment_times_current -= 1
+                    if self.fit_method == "LFS":
+                        # if self.need_fit_param and self.start_record:
+                        #     if (rospy.Time.now().to_sec() - self.start_record_time) >= self.record_time:
+                        drag_coefficient = np.squeeze(self.fitParam(self.x_data, self.a_data, self.motor_data, self.t_data)).tolist()
+                        print(drag_coefficient)
+                        # self.saveParam(drag_coefficient)
+                        return
+                    elif self.fit_method == "NM":
+                        alpha = 1
+                        gamma = 0.5
+                        rho = 0.5
+                        sigma = 0.5
+                        print("pose rmse: ", self.pose_error_rmse)
+                        if self.cal_type == "all":
+                            pose_error_rmse_last = self.pose_error_rmse
+                            sort_index = np.argsort(pose_error_rmse_last)
+                            pose_error_rmse_last = np.sort(pose_error_rmse_last)
 
-                    if not(self.need_fit_param):
-                        np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_mean[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:]), axis=0), fmt='%0.8f', delimiter=',')
-                        
-                        fig=plt.figure()
-                        ax1=fig.add_subplot(2,2,1)
-                        # ax1.set_title("pose_error_max")
-                        ax1.boxplot([self.pose_error_max], labels=['pose_error_max'], showmeans=True)
-                        ax1.set_ylabel("m")
-                        ax1.grid()
+                            # sort Drag coeff
+                            Drag_D = np.zeros((self.fit_size, 3, 3))
+                            Drag_kh = np.zeros((self.fit_size, 1))
+                            Drag_A = np.zeros((self.fit_size, 3, 3))
+                            Drag_B = np.zeros((self.fit_size, 3, 3))
+                            for i in range(self.fit_size):
+                                Drag_D[i] = self.Drag_D[sort_index[i]]
+                                Drag_kh[i] = self.Drag_kh[sort_index[i]]
+                                Drag_A[i] = self.Drag_A[sort_index[i]]
+                                Drag_B[i] = self.Drag_B[sort_index[i]]
+                            self.Drag_D = Drag_D
+                            self.Drag_kh = Drag_kh
+                            self.Drag_A = Drag_A
+                            self.Drag_B = Drag_B
 
-                        ax2=fig.add_subplot(2,2,2)
-                        # ax2.set_title("pose_error_mean")
-                        ax2.boxplot([self.pose_error_mean], labels=['pose_error_mean'], showmeans=True)
-                        ax2.set_ylabel("m")
-                        ax2.grid()
+                            if (pose_error_rmse_last[-1] - pose_error_rmse_last[0]) < 0.01:
+                                drag_coefficient = np.concatenate((np.sum(self.Drag_D[0], axis=1), self.Drag_kh[0], np.sum(self.Drag_D[0], axis=1)[:2], np.sum(self.Drag_B[0], axis=1))).tolist()
+                                print(drag_coefficient)
+                                # self.saveParam(drag_coefficient)
+                                return
 
-                        ax3=fig.add_subplot(2,2,3)
-                        # ax3.set_title("max_motor_speed_percent")
-                        ax3.boxplot([self.max_motor_speed / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max], labels=['max_motor_speed_percent'], showmeans=True)
-                        ax3.grid()
+                            # calculate reflection
+                            Drag_D_mean = np.mean(self.Drag_D[:-1], axis=0)
+                            Drag_kh_mean = np.mean(self.Drag_kh[:-1], axis=0)
+                            Drag_A_mean = np.mean(self.Drag_A[:-1], axis=0)
+                            Drag_B_mean = np.mean(self.Drag_B[:-1], axis=0)
+                            Drag_D_reflect =  Drag_D_mean + alpha * (Drag_D_mean - self.Drag_D[-1])
+                            Drag_kh_reflect = Drag_kh_mean + alpha * (Drag_kh_mean - self.Drag_kh[-1])
+                            Drag_A_reflect = Drag_A_mean + alpha * (Drag_A_mean - self.Drag_A[-1])
+                            Drag_B_reflect = Drag_B_mean + alpha * (Drag_B_mean - self.Drag_B[-1])
 
-                        ax4=fig.add_subplot(2,2,4)
-                        # ax4.set_title("max_v_w")
-                        ax4.boxplot([self.max_v_w], labels=['max_v_w'], showmeans=True)
-                        ax4.set_ylabel("m/s")
-                        ax4.grid()
+                            # calculate reflection error
+                            self.cal_type = "reflection"
+                            self.quadrotorOptimizer = []
+                            self.quadrotorOptimizer.append(QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D_reflect, Drag_kh=Drag_kh_reflect, Drag_A=Drag_A_reflect, Drag_B=Drag_B_reflect, need_obs_free=False), cost_type=self.cost_type, num=0))
+                            self.experiment_times = 1
+                        elif self.cal_type == "reflection":
+                            reflection_rmse = self.pose_error_rmse[0]
+                            if reflection_rmse >= pose_error_rmse_last[0] and reflection_rmse < pose_error_rmse_last[-2]:
+                                self.Drag_D[-1] = Drag_D_reflect
+                                self.Drag_kh[-1] = Drag_kh_reflect
+                                self.Drag_A[-1] = Drag_A_reflect
+                                self.Drag_B[-1] = Drag_B_reflect
+                                self.pose_error_rmse = pose_error_rmse_last
+                                self.pose_error_rmse[-1] = reflection_rmse
+                                self.finish_tracking = True
+                                self.cal_type = "all"
+                                continue
+                            elif reflection_rmse < pose_error_rmse_last[0]:
+                                Drag_D_expansion =  Drag_D_mean + gamma * (Drag_D_reflect - Drag_D_mean)
+                                Drag_kh_expansion = Drag_kh_mean + gamma * (Drag_kh_reflect - Drag_kh_mean)
+                                Drag_A_expansion = Drag_A_mean + gamma * (Drag_A_reflect - Drag_A_mean)
+                                Drag_B_expansion = Drag_B_mean + gamma * (Drag_B_reflect - Drag_B_mean)
+                                self.cal_type = "expansion"
+                                self.quadrotorOptimizer = []
+                                self.quadrotorOptimizer.append(QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D_expansion, Drag_kh=Drag_kh_expansion, Drag_A=Drag_A_expansion, Drag_B=Drag_B_expansion, need_obs_free=False), cost_type=self.cost_type, num=0))
+                                self.experiment_times = 1
+                            elif reflection_rmse >= pose_error_rmse_last[-2]:
+                                Drag_D_contraction =  Drag_D_mean + rho * (self.Drag_D[-1] - Drag_D_mean)
+                                Drag_kh_contraction = Drag_kh_mean + rho * (self.Drag_kh[-1] - Drag_kh_mean)
+                                Drag_A_contraction = Drag_A_mean + rho * (self.Drag_A[-1] - Drag_A_mean)
+                                Drag_B_contraction = Drag_B_mean + rho * (self.Drag_B[-1] - Drag_B_mean)
+                                self.cal_type = "contraction"
+                                self.quadrotorOptimizer = []
+                                self.quadrotorOptimizer.append(QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D_contraction, Drag_kh=Drag_kh_contraction, Drag_A=Drag_A_contraction, Drag_B=Drag_B_contraction, need_obs_free=False), cost_type=self.cost_type, num=0))
+                                self.experiment_times = 1
 
-                        plt.show()
+                            else:
+                                self.finish_tracking = True
+                                self.cal_type = "shrink"
+                                continue
+                        elif self.cal_type == "expansion":
+                            expansion_rmse = self.pose_error_rmse[0]
+                            if expansion_rmse < reflection_rmse:
+                                self.Drag_D [-1] = Drag_D_expansion
+                                self.Drag_kh[-1] = Drag_kh_expansion
+                                self.Drag_A [-1] = Drag_A_expansion
+                                self.Drag_B [-1] = Drag_B_expansion
+                                self.pose_error_rmse = pose_error_rmse_last
+                                self.pose_error_rmse[-1] = expansion_rmse
+                            else:
+                                self.Drag_D[-1] = Drag_D_reflect
+                                self.Drag_kh[-1] = Drag_kh_reflect
+                                self.Drag_A[-1] = Drag_A_reflect
+                                self.Drag_B[-1] = Drag_B_reflect
+                                self.pose_error_rmse = pose_error_rmse_last
+                                self.pose_error_rmse[-1] = reflection_rmse
+                            self.finish_tracking = True
+                            self.cal_type = "all"
+                            continue
+                        elif self.cal_type == "contraction":
+                            contraction_rmse = self.pose_error_rmse[0]
+                            if contraction_rmse < pose_error_rmse_last[-1]:
+                                self.Drag_D[-1] = Drag_D_contraction
+                                self.Drag_kh[-1] = Drag_kh_contraction
+                                self.Drag_A[-1] = Drag_A_contraction
+                                self.Drag_B[-1] = Drag_B_contraction
+                                self.finish_tracking = True
+                                self.cal_type = "all"
+                                self.pose_error_rmse = pose_error_rmse_last
+                                self.pose_error_rmse[-1] = contraction_rmse
+                            else:
+                                self.finish_tracking = True
+                                self.cal_type = "shrink"
+                                continue
+                        elif self.cal_type == "shrink":
+                            for i in range(self.fit_size - 1):
+                                self.Drag_D[i+1]  = self.Drag_D[0] + sigma * (self.Drag_D[i+1] - self.Drag_D[0])
+                                self.Drag_kh[i+1] = self.Drag_kh[0] + sigma * (self.Drag_kh[i+1] - self.Drag_kh[0])
+                                self.Drag_A[i+1]  = self.Drag_A[0] + sigma * (self.Drag_A[i+1] - self.Drag_A[0])
+                                self.Drag_B[i+1]  = self.Drag_B[0] + sigma * (self.Drag_B[i+1] - self.Drag_B[0])
+                            
+                            self.quadrotorOptimizer = []
+                            for i in range(self.fit_size):
+                                self.quadrotorOptimizer.append(QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=self.Drag_D[i], Drag_kh=self.Drag_kh[i], Drag_A=self.Drag_A[i], Drag_B=self.Drag_B[i], need_obs_free=False), cost_type=self.cost_type, num=i))
+                            self.experiment_times = self.fit_size
 
-                # return
-            if self.need_fit_param and self.start_record:
-                if (rospy.Time.now().to_sec() - self.start_record_time) >= self.record_time:
-                    drag_coefficient = np.squeeze(self.fitParam(self.x_data, self.a_data, self.motor_data, self.t_data)).tolist()
-                    print(drag_coefficient)
+                        # self.begin_time = rospy.Time.now().to_sec()
+                        self.experiment_times_current = 0
+                        self.pose_error = np.zeros(self.experiment_times)
+                        self.pose_error_square = np.zeros(self.experiment_times)
+                        self.pose_error_max = np.zeros(self.experiment_times)
+                        self.pose_error_mean = np.zeros(self.experiment_times)
+                        self.pose_error_rmse = np.zeros(self.experiment_times)
+                        self.max_v_w = np.zeros(self.experiment_times)
+                        self.max_motor_speed = np.zeros(self.experiment_times)
+                        self.reach_times = 0
+                        self.pose_error_num = 0
+                        self.trigger = True
 
-                    with open(self.yaml_file) as file:
-                        config = yaml.load(file)
-                    config.update({'D_dx': drag_coefficient[0]})
-                    config.update({'D_dy': drag_coefficient[1]})
-                    config.update({'D_dz': drag_coefficient[2]})
-                    config.update({'kh': drag_coefficient[3]})
-                    config.update({'D_ax': drag_coefficient[4]})
-                    config.update({'D_ay': drag_coefficient[5]})
-                    config.update({'D_bx': drag_coefficient[6]})
-                    config.update({'D_by': drag_coefficient[7]})
-                    config.update({'D_bz': drag_coefficient[8]})
-                    with open(self.yaml_file, 'w') as file:
-                        file.write(yaml.dump(config, default_flow_style=False))
-                    return
             rate.sleep()
 
     def odom_callback(self, msg):
@@ -332,7 +384,8 @@ class QuadMPC:
 
         pos = np.array(self.p)
 
-        boxVertexNp = self.quadrotorOptimizer.quadrotorModel.model.boxVertexNp
+        temp = min(len(self.quadrotorOptimizer)-1, self.experiment_times_current)
+        boxVertexNp = self.quadrotorOptimizer[temp].quadrotorModel.model.boxVertexNp
         RotationMat = quat_to_rotation_matrix(unit_quat(np.array(self.q)))
         # if self.have_polyhedron:
         #     polyhedrons = self.PolyhedronArray.polyhedrons
@@ -370,19 +423,11 @@ class QuadMPC:
         self.max_v_w = np.zeros(self.experiment_times)
         self.max_motor_speed = np.zeros(self.experiment_times)
         self.reach_times = 0
+        self.pose_error_num = 0
 
     def ap_fb_callback(self, msg):
         self.have_ap_fb = True
         self.ap_state =  msg.autopilot_state
-
-    def PolyhedronArray_callback(self, msg):
-        if not(self.have_odom):
-            return
-        self.have_polyhedron = True
-        self.PolyhedronArray = msg
-
-    def path_callback(self, msg):
-        self.Path = msg
 
     def TimeSynchronizer_callback(self, imu_msg, odom_msg, motor_msg):
         if not(self.start_record):
@@ -429,21 +474,17 @@ class QuadMPC:
                     self.reach_times = 0
                     self.reach_start_point = True
                     self.begin_time = rospy.Time.now().to_sec()
-                    self.start_record = True
-                    self.start_record_time = rospy.Time.now().to_sec()
+                    if self.fit_method == 'LFS':
+                        self.start_record = True
+                    # self.start_record_time = rospy.Time.now().to_sec()
                     self.have_reach_start_point_cmd = False
-                    if self.need_obs_free:
-                        self.polyhedrons = self.PolyhedronArray.polyhedrons
-                        self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
-                        self.path_in_use_pub.publish(self.Path)
-                        self.max_select = 0
                     print("arrive start point")
             return
         elif (not self.finish_tracking):
-            p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, velocity=self.vel, model=self.quadrotorOptimizer.quadrotorModel, plot=False)
+            p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, velocity=self.vel, model=self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel, plot=False)
             error_pose = np.linalg.norm(np.array(self.p) - p[0])
             error_vel  = np.linalg.norm(np.array(self.v_w) - v[0])
-            error_q    = np.linalg.norm(np.array(self.q) - q[0])
+            error_q    = np.linalg.norm(diff_between_q_q(np.array(self.q), q[0])[1:])
             error_br   = np.linalg.norm(np.array(self.w) - br[0])
             self.pose_error[self.experiment_times_current] += error_pose
             self.pose_error_square[self.experiment_times_current] += error_pose ** 2
@@ -454,7 +495,7 @@ class QuadMPC:
                     self.reach_times += 1
                     if self.reach_times > 500:
                         self.finish_tracking = True
-                        self.reach_times = 0    
+                        self.reach_times = 0
             elif rospy.Time.now().to_sec() - self.begin_time >= self.experiment_time:
                 self.finish_tracking = True
         else:
@@ -467,10 +508,10 @@ class QuadMPC:
             print("mean error: ", self.pose_error_mean[self.experiment_times_current])
             print("rmse      : ", self.pose_error_rmse[self.experiment_times_current])
             print("max v_w   : ", self.max_v_w[self.experiment_times_current])
-            print("max motor :  {:.2f}, {:.2f}%".format(self.max_motor_speed[self.experiment_times_current], self.max_motor_speed[self.experiment_times_current] / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max * 100))
+            # print("max motor :  {:.2f}, {:.2f}%".format(self.max_motor_speed[self.experiment_times_current], self.max_motor_speed[self.experiment_times_current] / self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.model.RotorSpeed_max * 100))
             return
         
-        self.runMPC(p=p, v=v, q=q, br=br, u=u, error_pose=error_pose, error_vel=error_vel, useTwoPolyhedron=False, selectStrategy=1)
+        self.runMPC(p=p, v=v, q=q, br=br, u=u, error_pose=error_pose, error_vel=error_vel)
         return
 
     def getReference(self, experiment, start_point, hover_point, time_now, t_horizon, N_node, velocity, model, plot):
@@ -503,11 +544,12 @@ class QuadMPC:
             # p[:, 1] = temp[1]
             # p[:, 2] = temp[2]
             # p = np.repeat(hover_point[np.newaxis,:], repeats=N_node + 1, axis=0)
-            yaw[:, 0] = pi
+            # yaw[:, 0] = pi
             # print(p)
 
         elif experiment == 'circle':
-            w = 2 # rad/s
+            # w = 2 # rad/s
+            w = velocity / r
             phi = 0
             p[:, 0] = r * np.cos(w * t + phi)
             p[:, 1] = r * np.sin(w * t + phi)
@@ -523,6 +565,45 @@ class QuadMPC:
             j[:, 2] = 0
             s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
             s[:, 1] = w ** 4 * r * np.sin(w * t + phi)
+            s[:, 2] = 0
+        elif experiment == 'circle_speedup_stay':
+            w = velocity / r
+            w_rate = 0.03
+            # w = t * w_rate # rad/s
+            phi = 0
+
+            for i in range(N_node + 1):
+                if w_rate * t[i] ** 2 < w * t[i]:
+                    p[i, 0] = r * np.cos(w_rate * t[i] ** 2 + phi)
+                    p[i, 1] = r * np.sin(w_rate * t[i] ** 2 + phi)
+                    
+                    v[i, 0] = - 2 * w_rate * t[i] * r * np.sin(w_rate * t[i] ** 2 + phi)
+                    v[i, 1] = 2 * w_rate * t[i] * r * np.cos(w_rate * t[i] ** 2 + phi)
+                    
+                    a[i, 0] = - 2 * w_rate * r * np.sin(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi)
+                    a[i, 1] = 2 * w_rate * r * np.cos(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi)
+                    
+                    j[i, 0] = - 4 * w_rate ** 2 * t[i] * r * np.cos(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * t[i] * r * np.cos(w_rate * t[i] ** 2 + phi) + (2 * w_rate * t[i]) ** 3 * r * np.sin(w_rate * t[i] ** 2 + phi)
+                    j[i, 1] = - 4 * w_rate ** 2 * t[i] * r * np.sin(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * t[i] * r * np.sin(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 3 * r * np.cos(w_rate * t[i] ** 2 + phi)
+                    
+                    s[i, 0] = - 4 * w_rate ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) + 8 * w_rate ** 3 * t[i] ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) + 16 * w_rate ** 3 * t[i] ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) + 6 * (2 * w_rate * t[i]) ** 2 * w_rate * r * np.sin(w_rate * t[i] ** 2 + phi) + (2 * w_rate * t[i]) ** 4 * r * np.cos(w_rate * t[i] ** 2 + phi)
+                    s[i, 1] = - 4 * w_rate ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 3 * t[i] ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) - 16 * w_rate ** 3 * t[i] ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) - 6 * (2 * w_rate * t[i]) ** 2 * w_rate * r * np.cos(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 4 * r * np.sin(w_rate * t[i]** 2 + phi)
+                else:
+                    p[i, 0] = r * np.cos(w * t[i] + phi)
+                    p[i, 1] = r * np.sin(w * t[i] + phi)
+                    v[i, 0] = - w ** 1 * r * np.sin(w * t[i] + phi)
+                    v[i, 1] = w ** 1 * r * np.cos(w * t[i] + phi)
+                    a[i, 0] = - w ** 2 * r * np.cos(w * t[i] + phi)
+                    a[i, 1] = - w ** 2 * r * np.sin(w * t[i] + phi)
+                    j[i, 0] = w ** 3 * r * np.sin(w * t[i] + phi)
+                    j[i, 1] = - w ** 3 * r * np.cos(w * t[i] + phi)
+                    s[i, 0] = w ** 4 * r * np.cos(w * t[i] + phi)
+                    s[i, 1] = w ** 4 * r * np.sin(w * t[i] + phi)
+
+            p[:, 2] = start_point[2]
+            v[:, 2] = 0
+            a[:, 2] = 0
+            j[:, 2] = 0
             s[:, 2] = 0
         elif experiment == 'circle_speedup':
             w_rate = 0.03
@@ -578,8 +659,11 @@ class QuadMPC:
             p[:, 1] = r * np.cos(theta) / (1 + np.sin(theta) ** 2)
             p[:, 2] = start_point[2]
 
-        # for i in range(len(p)):
-        #     yaw[i] = math.atan2(v[i, 1], v[i, 0])
+        if self.heading:
+            for i in range(len(p)):
+                yaw[i] = math.atan2(v[i, 1], v[i, 0])
+        else:
+            yaw[:] = 0
             # if i == 1:
             #     if yaw[i] < -2.8 and yaw[i - 1] > 2.8:
             #         yawdot[i - 1] = (yaw[i] + 2 * np.pi - yaw[i - 1]) / dt
@@ -733,156 +817,42 @@ class QuadMPC:
 
         return p, v, q, br, u
 
-    def runMPC(self, p, v, q, br, u, error_pose, error_vel, useTwoPolyhedron, selectStrategy):
-        self.setReference(p=p, v=v, q=q, br=br, u=u, useTwoPolyhedron=useTwoPolyhedron, selectStrategy=selectStrategy)
+    def runMPC(self, p, v, q, br, u, error_pose, error_vel):
+        self.setReference(p=p, v=v, q=q, br=br, u=u)
         time = rospy.Time.now().to_sec()
-        self.quadrotorOptimizer.acados_solver.solve()
+        self.quadrotorOptimizer[self.experiment_times_current].acados_solver.solve()
         self.lastMPCTime = rospy.Time.now().to_sec()
         self.sendCmd()
         self.recordData(p=p, v=v, q=q, br=br, u=u, error_pose=error_pose, error_vel=error_vel, time=time)
         self.visTraj()
 
-    def selectPolyhedron(self, use_all_one_pred):
-        boxVertexNp = self.quadrotorOptimizer.quadrotorModel.model.boxVertexNp
-        RotationMat = quat_to_rotation_matrix(unit_quat(np.array(self.q)))
-        pos = np.array(self.p)
-
-        select = self.max_select
-        if not(self.use_prior):
-            self.polyhedrons = self.PolyhedronArray.polyhedrons
-            self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
-            self.path_in_use_pub.publish(self.Path)
-
-        if use_all_one_pred == 1:
-            # only all inside 
-            for i in range(self.max_select, len(self.polyhedrons) - 1):
-                inside = True
-                for j in range(len(self.polyhedrons[i + 1].points)):
-                    temp = self.polyhedrons[i + 1].points[j]
-                    point = np.array([temp.x, temp.y, temp.z])
-                    temp = self.polyhedrons[i + 1].normals[j]
-                    normal = np.array([temp.x, temp.y, temp.z])
-                    b = normal.dot(point)
-                    for k in range(len(boxVertexNp)):
-                        pot = boxVertexNp[k]
-                        if normal.dot(RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis]) - b > 0:
-                            inside = False
-                            break
-                    if inside == False:
-                        break
-                if inside == False:
-                    break
-                else:
-                    select = i + 1
-                    if self.use_prior:
-                        self.max_select = select
-        elif use_all_one_pred == 2:
-            # as long as one inside
-            for i in range(self.max_select, len(self.polyhedrons) - 1):
-                for k in range(len(boxVertexNp)):
-                    inside = True
-                    pot = boxVertexNp[k]
-                    pot = RotationMat.dot(pot[:,np.newaxis]) + pos[:,np.newaxis]
-                    for j in range(len(self.polyhedrons[i + 1].points)):
-                        temp = self.polyhedrons[i + 1].points[j]
-                        point = np.array([temp.x, temp.y, temp.z])
-                        temp = self.polyhedrons[i + 1].normals[j]
-                        normal = np.array([temp.x, temp.y, temp.z])
-                        b = normal.dot(point)
-                        
-                        if normal.dot(pot) - b > 0:
-                            inside = False
-                            break
-                    if inside == True:
-                        break
-                if inside == False:
-                    break
-                else:
-                    select = i + 1
-                    if self.use_prior:
-                        self.max_select = select
-        elif use_all_one_pred == 3:
-            posPred = np.array([self.quadrotorOptimizer.acados_solver.get(int(self.N * 0.1), "x")[:3]])
-            for i in range(self.max_select, len(self.polyhedrons) - 1):
-                inside = True
-                for j in range(len(self.polyhedrons[i + 1].points)):
-                    temp = self.polyhedrons[i + 1].points[j]
-                    point = np.array([temp.x, temp.y, temp.z])
-                    temp = self.polyhedrons[i + 1].normals[j]
-                    normal = np.array([temp.x, temp.y, temp.z])
-                    b = normal.dot(point)
-                    if posPred.dot(normal[:,np.newaxis]) - b > 0:
-                        inside = False
-                        break
-                if inside == False:
-                    break
-                else:
-                    select = i + 1
-                    if self.use_prior:
-                        self.max_select = select
-        return select
-
-    def setReference(self, p, v, q, br, u, useTwoPolyhedron, selectStrategy):
-        self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
-        self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
-        if self.need_obs_free:
-            paramPolyhedron = self.getPolyhedronParam(useTwoPolyhedron=useTwoPolyhedron, selectStrategy=selectStrategy)
+    def setReference(self, p, v, q, br, u):
+        self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(0, "lbx", self.x0)
+        self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(0, "ubx", self.x0)
         for i in range(self.N):
             yref = np.concatenate((p[i], v[i], q[i], br[i], u[i]))
-            if self.quadrotorOptimizer.ocp.cost.cost_type == "LINEAR_LS":
-                self.quadrotorOptimizer.acados_solver.set(i, 'yref', yref)
-                # self.quadrotorOptimizer.acados_solver.set(i, 'u', u[i])
-                # self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
-                # self.quadrotorOptimizer.acados_solver.set(i, 'xdot_guess', xdot_guessref)
-            elif self.quadrotorOptimizer.ocp.cost.cost_type == "EXTERNAL":
+            if self.quadrotorOptimizer[self.experiment_times_current].ocp.cost.cost_type == "LINEAR_LS":
+                self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(i, 'yref', yref)
+                # self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(i, 'u', u[i])
+                # self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(self.N, 'yref', xref)
+                # self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(i, 'xdot_guess', xdot_guessref)
+            elif self.quadrotorOptimizer[self.experiment_times_current].ocp.cost.cost_type == "EXTERNAL":
                 param = yref
-                if self.need_obs_free:
-                    param = np.concatenate((param, paramPolyhedron))
-                self.quadrotorOptimizer.acados_solver.set(i, 'p', param)
+                self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(i, 'p', param)
 
         xref = np.concatenate((p[self.N], v[self.N], q[self.N], br[self.N]))
-        if self.quadrotorOptimizer.ocp.cost.cost_type_e == "LINEAR_LS":
-            self.quadrotorOptimizer.acados_solver.set(self.N, 'yref', xref)
-        elif self.quadrotorOptimizer.ocp.cost.cost_type_e == "EXTERNAL":
-            param = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.quadrotorModel.model.u.size()[0])))
-            if self.need_obs_free:
-                param = np.concatenate((param, paramPolyhedron))
-            self.quadrotorOptimizer.acados_solver.set(self.N, 'p', param)
-        
-    def getPolyhedronParam(self, useTwoPolyhedron, selectStrategy):
-        selectedPolyhedron = self.polyhedrons[self.selectPolyhedron(use_all_one_pred=selectStrategy)]
-        paramPolyhedron = np.array([])
-        for i in range(self.quadrotorOptimizer.quadrotorModel.model.MaxNumOfPolyhedrons):
-            if i < len(selectedPolyhedron.points):
-                temp = selectedPolyhedron.points[i]
-                point = np.array([temp.x, temp.y, temp.z])
-                temp = selectedPolyhedron.normals[i]
-                normal = np.array([temp.x, temp.y, temp.z])
-                b = normal.dot(point)
-                paramPolyhedron = np.concatenate((paramPolyhedron, normal, np.array([b])))
-            else:
-                paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
-
-        if useTwoPolyhedron:
-            selectedPolyhedron_next = self.polyhedrons[min(selectedPolyhedron + 1, len(self.polyhedrons) - 1)]
-            for i in range(self.quadrotorOptimizer.quadrotorModel.model.MaxNumOfPolyhedrons):
-                if i < len(selectedPolyhedron_next.points):
-                    temp = selectedPolyhedron_next.points[i]
-                    point = np.array([temp.x, temp.y, temp.z])
-                    temp = selectedPolyhedron_next.normals[i]
-                    normal = np.array([temp.x, temp.y, temp.z])
-                    b = normal.dot(point)
-                    paramPolyhedron = np.concatenate((paramPolyhedron, normal, np.array([b])))
-                else:
-                    paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
-        return paramPolyhedron
+        if self.quadrotorOptimizer[self.experiment_times_current].ocp.cost.cost_type_e == "LINEAR_LS":
+            self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(self.N, 'yref', xref)
+        elif self.quadrotorOptimizer[self.experiment_times_current].ocp.cost.cost_type_e == "EXTERNAL":
+            param = np.concatenate((xref, np.zeros(self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.model.u.size()[0])))
+            self.quadrotorOptimizer[self.experiment_times_current].acados_solver.set(self.N, 'p', param)
 
     def sendCmd(self):
-        x1 = self.quadrotorOptimizer.acados_solver.get(1, "x")
-        u1 = self.quadrotorOptimizer.acados_solver.get(0, "u")
+        x1 = self.quadrotorOptimizer[self.experiment_times_current].acados_solver.get(1, "x")
+        u1 = self.quadrotorOptimizer[self.experiment_times_current].acados_solver.get(0, "u")
         # p  = x1[: 3]
         # v  = x1[3: 6]
-        q  = x1[6: 10]
+        q  = x1[6:10]
         br = x1[-3:]
 
         cmd = ControlCommand()
@@ -892,8 +862,8 @@ class QuadMPC:
         cmd.armed = True
         cmd.orientation.w, cmd.orientation.x, cmd.orientation.y, cmd.orientation.z = q[0], q[1], q[2], q[3]
         cmd.bodyrates.x, cmd.bodyrates.y, cmd.bodyrates.z = br[0], br[1], br[2]
-        cmd.collective_thrust = np.sum(u1 ** 2 * self.quadrotorOptimizer.quadrotorModel.kT) / self.quadrotorOptimizer.quadrotorModel.mass
-        cmd.rotor_thrusts = u1 ** 2 * self.quadrotorOptimizer.quadrotorModel.kT
+        cmd.collective_thrust = np.sum(u1 ** 2 * self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.kT) / self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.mass
+        cmd.rotor_thrusts = u1 ** 2 * self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.kT
         self.ap_control_cmd_pub.publish(cmd)
 
     def recordData(self, p, v, q, br, u, error_pose, error_vel, time):
@@ -930,7 +900,7 @@ class QuadMPC:
             print("pose:        [{:.2f}, {:.2f}, {:.2f}]".format(self.p[0], self.p[1], self.p[2]))
             print("vel:         [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(self.v_w[0], self.v_w[1], self.v_w[2], vw_abs))
             print("pose error:  [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(p[0, 0] - self.p[0], p[0, 1] - self.p[1], p[0, 2] - self.p[2], error_pose))
-            print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max * 100))
+            print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.model.RotorSpeed_max * 100))
             print()
 
     def visTraj(self):
@@ -954,7 +924,7 @@ class QuadMPC:
         traj.scale.y = 0.1
         traj.scale.z = 0.1
         for i in range(self.N):
-            temp  = self.quadrotorOptimizer.acados_solver.get(i + 1, "x")
+            temp  = self.quadrotorOptimizer[self.experiment_times_current].acados_solver.get(i + 1, "x")
             point = Point()
             point.x = temp[0]
             point.y = temp[1]
@@ -962,28 +932,17 @@ class QuadMPC:
             traj.points.append(point)
         self.traj_vis_pub.publish(traj)
 
-    def NelderMead(self):
-        return
-
-    def Simulation(self, x_data, motor_data, t):
-        model = self.quadrotorOptimizer.quadrotorModel
-        x_sim = np.zeros((len(motor_data), 13))
-        x_sim[0] = x_data[0]
-        for i in range(len(motor_data) - 1):
-            x_sim[i + 1] = np.concatenate((model.Simulation(x_sim[i, :3], x_sim[i, 3:6], x_sim[i, 6:10], x_data[i, 10:], np.abs(motor_data[i]), t[i + 1] - t[i])))
-        return x_sim
-
     def fitParam(self, x_data, a_data, motor_data, t_data):
         self.need_fit_param = False
-        kT = self.quadrotorOptimizer.quadrotorModel.kT
-        mass = self.quadrotorOptimizer.quadrotorModel.mass
-        # g = self.quadrotorOptimizer.quadrotorModel.g[2]
+        kT = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.kT
+        mass = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.mass
+        # g = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.g[2]
         b_drag = np.zeros((3 * len(x_data), 1))
         A_drag = np.zeros((3 * len(x_data), 4))
         d_drag = np.zeros((3 * len(x_data), 1))
         C_drag = np.zeros((3 * len(x_data), 5))
         brDotset = np.gradient(x_data[:, 10:13], t_data, axis=0)
-        Inertia = self.quadrotorOptimizer.quadrotorModel.Inertia
+        Inertia = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.Inertia
         for i in range(len(x_data)):
             # p = x_data[i, :3]
             v = x_data[i, 3:6]
@@ -992,7 +951,7 @@ class QuadMPC:
             q = x_data[i, 6:10]
             br = x_data[i, 10:13]
             brDot = brDotset[i, :]
-            temp_input = self.quadrotorOptimizer.quadrotorModel.G.dot(motor_data[i] ** 2)
+            temp_input = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.G.dot(motor_data[i] ** 2)
             # f_thrust = kT * motor_data[i].dot(motor_data[i])
             f_thrust = temp_input[0]
             torque = temp_input[1:]
@@ -1015,6 +974,21 @@ class QuadMPC:
             d_drag[i * 3: i * 3 + 3, 0] = Inertia.dot(brDot.T) + crossmat(br).dot(Inertia).dot(br.T) - torque
 
         return np.concatenate((np.linalg.inv(np.dot(A_drag.T, A_drag)).dot(A_drag.T).dot(b_drag), np.linalg.inv(np.dot(C_drag.T, C_drag)).dot(C_drag.T).dot(d_drag)))
+
+    def saveParam(self, drag_coefficient):
+        with open(self.yaml_file) as file:
+            config = yaml.load(file)
+        config.update({'D_dx': drag_coefficient[0]})
+        config.update({'D_dy': drag_coefficient[1]})
+        config.update({'D_dz': drag_coefficient[2]})
+        config.update({'kh': drag_coefficient[3]})
+        config.update({'D_ax': drag_coefficient[4]})
+        config.update({'D_ay': drag_coefficient[5]})
+        config.update({'D_bx': drag_coefficient[6]})
+        config.update({'D_by': drag_coefficient[7]})
+        config.update({'D_bz': drag_coefficient[8]})
+        with open(self.yaml_file, 'w') as file:
+            file.write(yaml.dump(config, default_flow_style=False))
 
     def shutdown_node(self):
         print("closed")

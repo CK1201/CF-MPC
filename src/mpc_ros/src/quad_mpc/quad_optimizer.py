@@ -5,7 +5,7 @@ from src.utils.utils import *
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 
 class QuadrotorOptimizer:
-    def __init__(self, Tf, N, quadrotorModel, cost_type) -> None:
+    def __init__(self, Tf, N, quadrotorModel, cost_type, num) -> None:
         self.ocp = AcadosOcp()
         # acados_solver = AcadosOcpSolver(ocp)
         acados_source_path = os.environ['ACADOS_SOURCE_DIR']
@@ -80,10 +80,12 @@ class QuadrotorOptimizer:
             self.ocp.cost.Vx_e = Vx_e
 
         elif cost_type == "EXTERNAL":
-            # Q = np.diag(np.concatenate((np.ones(3) * 1, np.ones(3) * 0.02, np.ones(4) * 0.5, np.ones(3) * 0.01)))
+            # Q = np.diag(np.concatenate((np.ones(3) * 10, np.ones(3) * 0.02, np.ones(3) * 0.5, np.ones(3) * 0.01)))
+            # R = np.eye(nu) / model.RotorSpeed_max
+
             Q = np.diag(np.concatenate((np.ones(3) * 200, np.ones(3) * 1, np.ones(3) * 5, np.ones(3) * 1)))
-            # Q[2,2] = 500 # z
-            Q[8,8] = 100 # yaw
+            Q[2,2] = 500 # z
+            Q[8,8] = 200 # yaw
             R = np.eye(nu) * 6 / model.RotorSpeed_max
 
             diff_q = diff_between_q_q(acModel.x[6:10], acModel.p[6:10])[1:]
@@ -183,11 +185,13 @@ class QuadrotorOptimizer:
         
 
         # create solver
-        json_file = os.path.join('./' + model.name + '_acados_ocp.json')
+        json_file = os.path.join('./' + model.name + '_' + str(num) + '_acados_ocp.json')
         if os.path.exists(json_file):
-            print("remove "+ json_file)
+            print("remove " + json_file)
             os.remove(json_file)
         self.acados_solver = AcadosOcpSolver(self.ocp, json_file = json_file)
+        print("create " + json_file)
+        print()
         # self.acados_integrator = AcadosSimSolver(self.ocp, json_file = json_file)
 
     def LossFunction(self, x):

@@ -4,7 +4,7 @@ import numpy as np
 from src.utils.utils import *
 
 class QuadrotorModel:
-    def __init__(self, quad_name = 'hummingbird', configuration = '+', Drag_D = np.zeros((3, 3)), Drag_kh = 0, Drag_A = np.zeros((3, 3)), Drag_B = np.zeros((3, 3)), need_obs_free = False) -> None:
+    def __init__(self, quad_name='hummingbird', configuration='+', Drag_D=np.zeros((3, 3)), Drag_kh=0, Drag_A=np.zeros((3, 3)), Drag_B=np.zeros((3, 3)), need_obs_free=False) -> None:
 
         this_path = os.path.dirname(os.path.realpath(__file__))
         params_file = os.path.join(this_path, '..', '..', 'xacro', quad_name + '.xacro')
@@ -77,14 +77,8 @@ class QuadrotorModel:
                             [0, -quad_length, -height],
                             [0, -quad_length, height]])
         self.model.boxVertex = ca.SX.zeros(3, 8)
-        # Rotation = ca.SX.sym("Rotation", 3, 3)
         for i in range (len(self.model.boxVertexNp)):
             self.model.boxVertex[:,i] = RotationMat @ self.model.boxVertexNp[i][:,np.newaxis] + p
-        # self.boxVertex[0] = (ca.SX.sym("Rotation", 3, 3) @ self.boxVertex[0]).T
-        # print(Rotation)
-        # print(self.boxVertex)
-        # print(ca.SX.sym("Rotation", 3, 3))
-        # print((ca.SX.sym("Rotation", 3, 3) @ self.boxVertex[1]).size())
 
         # xdot
         pDot = ca.SX.sym("PDot", 3, 1)
@@ -96,7 +90,6 @@ class QuadrotorModel:
         # u
         RotorSpeed = ca.SX.sym("RotorSpeed", 4, 1)
         temp_input = self.G @ (RotorSpeed ** 2)
-        # print(temp_input[0])
         
         # algebraic variables
         # z = ca.vertcat([])
@@ -117,7 +110,6 @@ class QuadrotorModel:
         vh = RotationMat.T @ v
         vh[2] = 0
         tao_d = - self.A @ RotationMat.T @ v - self.B @ BodyRate
-        # print(tempBodyRate)
         f_expl = ca.vertcat(
             v,
             v_dot_q(ca.vertcat(0, 0, temp_input[0] / self.mass), Orientation) - self.g - RotationMat @ (self.D @ RotationMat.T @ v - ca.vertcat(0, 0, self.kh * vh.T @ vh)) / self.mass,
@@ -126,12 +118,6 @@ class QuadrotorModel:
         )
         
         # con_h
-        
-        # print(RotationMat @ boxVertex[0].T + p)
-        # con_h1 = bodyFrame + boxVertex
-        # RotationMat @ self.body_width @ self.body_height
-        # con_h = ca.vertcat([[RotationMat @ boxVertex[i].T + p] for i in range(len(boxVertex))])
-        # print(con_h)
         con_h = None
 
         self.model.name = quad_name
