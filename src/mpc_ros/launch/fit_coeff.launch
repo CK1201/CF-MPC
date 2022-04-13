@@ -2,12 +2,12 @@
     <arg name="mav_name" default="hummingbird"/>
     <arg name="fit_method" default="NM"/>       <!-- LFS, NM -->
     <arg name="cost_type" default="EXTERNAL"/>   <!-- EXTERNAL, LINEAR_LS -->
-    <arg name="plot" default="false"/>
-    <arg name="max_vel" default="5"/>
-    <arg name="heading" default="false"/>
+    <arg name="stable_time" default="5"/>
+    <arg name="heading" default="true"/>
     
     <arg name="expriment" default="circle_speedup"/>
-    <arg name="experiment_time" default="20"/>
+    <arg name="experiment_time" default="25"/>
+    <arg name="max_vel" default="5"/>
     <arg name="start_x" default="5"/>
     <arg name="start_y" default="0"/>
     <arg name="start_z" default="10"/>
@@ -44,7 +44,7 @@
         <param name="start_x" value="$(arg start_x)"/>
         <param name="start_y" value="$(arg start_y)"/>
         <param name="start_z" value="$(arg start_z)"/>
-        <param name="plot" value="$(arg plot)"/>
+        <param name="stable_time" value="$(arg stable_time)"/>
         <param name="fit_method" value="$(arg fit_method)"/>
         <param name="cost_type" value="$(arg cost_type)"/>
         <param name="max_vel" value="$(arg max_vel)"/>

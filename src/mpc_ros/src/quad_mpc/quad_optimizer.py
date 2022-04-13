@@ -45,7 +45,7 @@ class QuadrotorOptimizer:
         # nh = constraint.expr.shape[0]
         # nsh = nh
         # ns = nsh + nsbx
-        # print(nh)
+        # print(cost_type)
 
         # discretization
         self.ocp.dims.N     = N
@@ -172,7 +172,7 @@ class QuadrotorOptimizer:
         self.ocp.solver_options.tf              = Tf
         self.ocp.solver_options.qp_solver       = "FULL_CONDENSING_HPIPM" # 'PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'PARTIAL_CONDENSING_QPDUNES', 'PARTIAL_CONDENSING_OSQP'
         self.ocp.solver_options.nlp_solver_type = "SQP" # SQP SQP_RTI
-        self.ocp.solver_options.hessian_approx  = "GAUSS_NEWTON" # 'GAUSS_NEWTON',                      'EXACT'
+        self.ocp.solver_options.hessian_approx  = "GAUSS_NEWTON" # 'GAUSS_NEWTON', 'EXACT'
         self.ocp.solver_options.integrator_type = "ERK"
         self.ocp.solver_options.print_level     = 0
         # self.ocp.solver_options.sim_method_num_stages = 4

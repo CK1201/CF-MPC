@@ -57,9 +57,9 @@ class QuadMPC:
         self.hover_point[1] = rospy.get_param('~hover_y', default='0')
         self.hover_point[2] = rospy.get_param('~hover_z', default='2')
         self.vel = rospy.get_param('~max_vel', default='0.1')
+        self.heading = rospy.get_param('~heading', default='false')
         plot = rospy.get_param('~plot', default='true')
         self.need_fit_param = rospy.get_param('~fit_param', default='true')
-        self.fit_method = rospy.get_param('~fit_method', default='LFS')
         self.cost_type = rospy.get_param('~cost_type', default='LINEAR_LS')
         self.need_obs_free = rospy.get_param('~need_obs_free', default='false')
         self.use_prior = rospy.get_param('~use_prior', default='true')
@@ -73,12 +73,9 @@ class QuadMPC:
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps'
         if self.need_fit_param:
-            if self.fit_method == "LFS":
-                self.experiment_time = 40
-                self.experiment_times = 1
-                self.record_time = self.experiment_time + 10
-            elif self.fit_method == "NM":
-                print("todo")
+            self.experiment_time = 40
+            self.experiment_times = 1
+            self.record_time = self.experiment_time + 10
         self.pose_error_num = 0
         self.print_cnt = 0
         self.a_data = None
@@ -104,12 +101,9 @@ class QuadMPC:
         self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
         Drag_A = np.zeros((3, 3))
         if self.need_fit_param or not(self.with_drag):
-            if self.fit_method == "LFS" or not(self.with_drag):
-                Drag_D = np.zeros((3, 3))
-                Drag_kh = 0
-                Drag_B = np.zeros((3, 3))
-            elif self.fit_method == "NM":
-                print("todo")
+            Drag_D = np.zeros((3, 3))
+            Drag_kh = 0
+            Drag_B = np.zeros((3, 3))
         else:
             try:
                 with open(self.yaml_file) as file:
@@ -157,6 +151,7 @@ class QuadMPC:
         # self.control_cmd_pub = rospy.Publisher('/' + quad_name + '/control_command', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.ap_control_cmd_pub = rospy.Publisher('/' + quad_name + '/autopilot/control_command_input', ControlCommand, queue_size=1, tcp_nodelay=True)
         self.traj_vis_pub = rospy.Publisher('/' + quad_name + '/quad_traj', Marker, queue_size=1, tcp_nodelay=True)
+        self.mpc_ref_vis_pub = rospy.Publisher('/' + quad_name + '/mpc_ref', Marker, queue_size=1, tcp_nodelay=True)
 
         if self.need_obs_free:
             self.PolyhedronArray_sub = rospy.Subscriber('/flight_corridor_node/polyhedron_array', PolyhedronArray, self.PolyhedronArray_callback)
@@ -262,20 +257,8 @@ class QuadMPC:
                 if (rospy.Time.now().to_sec() - self.start_record_time) >= self.record_time:
                     drag_coefficient = np.squeeze(self.fitParam(self.x_data, self.a_data, self.motor_data, self.t_data)).tolist()
                     print(drag_coefficient)
+                    self.saveParam(drag_coefficient)
 
-                    with open(self.yaml_file) as file:
-                        config = yaml.load(file)
-                    config.update({'D_dx': drag_coefficient[0]})
-                    config.update({'D_dy': drag_coefficient[1]})
-                    config.update({'D_dz': drag_coefficient[2]})
-                    config.update({'kh': drag_coefficient[3]})
-                    config.update({'D_ax': drag_coefficient[4]})
-                    config.update({'D_ay': drag_coefficient[5]})
-                    config.update({'D_bx': drag_coefficient[6]})
-                    config.update({'D_by': drag_coefficient[7]})
-                    config.update({'D_bz': drag_coefficient[8]})
-                    with open(self.yaml_file, 'w') as file:
-                        file.write(yaml.dump(config, default_flow_style=False))
                     return
             rate.sleep()
 
@@ -578,8 +561,11 @@ class QuadMPC:
             p[:, 1] = r * np.cos(theta) / (1 + np.sin(theta) ** 2)
             p[:, 2] = start_point[2]
 
-        # for i in range(len(p)):
-        #     yaw[i] = math.atan2(v[i, 1], v[i, 0])
+        if self.heading:
+            for i in range(len(p)):
+                yaw[i] = math.atan2(v[i, 1], v[i, 0])
+        else:
+            yaw[:] = 0
             # if i == 1:
             #     if yaw[i] < -2.8 and yaw[i - 1] > 2.8:
             #         yawdot[i - 1] = (yaw[i] + 2 * np.pi - yaw[i - 1]) / dt
@@ -730,6 +716,33 @@ class QuadMPC:
             ax12.legend()
             ax12.grid()
             plt.show()
+
+        mpc_ref = Marker()
+        mpc_ref.header.frame_id = '/world'
+        mpc_ref.header.stamp = rospy.Time.now()
+        mpc_ref.ns = "mpc_ref"
+        mpc_ref.id = 0
+        mpc_ref.type = Marker.SPHERE_LIST
+        mpc_ref.action = Marker.ADD
+        mpc_ref.pose.orientation.w = 1
+        mpc_ref.pose.orientation.x = 0
+        mpc_ref.pose.orientation.y = 0
+        mpc_ref.pose.orientation.z = 0
+        mpc_ref.color.r = 1
+        mpc_ref.color.g = 0
+        mpc_ref.color.b = 1
+        mpc_ref.color.a = 1
+        mpc_ref.scale.x = 0.1
+        mpc_ref.scale.y = 0.1
+        mpc_ref.scale.z = 0.1
+
+        for i in range(len(p)):
+            point = Point()
+            point.x = p[i,0]
+            point.y = p[i,1]
+            point.z = p[i,2]
+            mpc_ref.points.append(point)
+        self.mpc_ref_vis_pub.publish(mpc_ref)
 
         return p, v, q, br, u
 
@@ -930,6 +943,7 @@ class QuadMPC:
             print("pose:        [{:.2f}, {:.2f}, {:.2f}]".format(self.p[0], self.p[1], self.p[2]))
             print("vel:         [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(self.v_w[0], self.v_w[1], self.v_w[2], vw_abs))
             print("pose error:  [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(p[0, 0] - self.p[0], p[0, 1] - self.p[1], p[0, 2] - self.p[2], error_pose))
+            print("pose rmse:   [{:.3f}]".format(sqrt(self.pose_error_square[self.experiment_times_current] / self.pose_error_num)))
             print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max * 100))
             print()
 
@@ -961,9 +975,6 @@ class QuadMPC:
             point.z = temp[2]
             traj.points.append(point)
         self.traj_vis_pub.publish(traj)
-
-    def NelderMead(self):
-        return
 
     def Simulation(self, x_data, motor_data, t):
         model = self.quadrotorOptimizer.quadrotorModel
@@ -1015,6 +1026,21 @@ class QuadMPC:
             d_drag[i * 3: i * 3 + 3, 0] = Inertia.dot(brDot.T) + crossmat(br).dot(Inertia).dot(br.T) - torque
 
         return np.concatenate((np.linalg.inv(np.dot(A_drag.T, A_drag)).dot(A_drag.T).dot(b_drag), np.linalg.inv(np.dot(C_drag.T, C_drag)).dot(C_drag.T).dot(d_drag)))
+
+    def saveParam(self, drag_coefficient):
+        with open(self.yaml_file) as file:
+            config = yaml.load(file)
+        config.update({'D_dx': drag_coefficient[0]})
+        config.update({'D_dy': drag_coefficient[1]})
+        config.update({'D_dz': drag_coefficient[2]})
+        config.update({'kh': drag_coefficient[3]})
+        config.update({'D_ax': drag_coefficient[4]})
+        config.update({'D_ay': drag_coefficient[5]})
+        config.update({'D_bx': drag_coefficient[6]})
+        config.update({'D_by': drag_coefficient[7]})
+        config.update({'D_bz': drag_coefficient[8]})
+        with open(self.yaml_file, 'w') as file:
+            file.write(yaml.dump(config, default_flow_style=False))
 
     def shutdown_node(self):
         print("closed")
