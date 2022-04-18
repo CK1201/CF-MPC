@@ -1,17 +1,15 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <arg name="with_drag" default="true"/>
-    <arg name="fit_param" default="false"/>
-    <arg name="fit_method" default="LFS"/>       <!-- LFS, NM -->
+    <arg name="with_drag" default="false"/>
     <arg name="cost_type" default="EXTERNAL"/>   <!-- obs_free needs cost_type to be EXTERNAL.  EXTERNAL, LINEAR_LS -->
-    <arg name="need_obs_free" default="false"/>
+    <arg name="need_obs_free" default="true"/>
     <arg name="experiment_time" default="38"/>
     <arg name="experiment_times" default="4"/>
     <arg name="plot" default="false"/>
-    <arg name="use_prior" default="true"/>
+    <arg name="use_prior" default="false"/>
     <arg name="use_jps" default="true"/>
-    <arg name="max_vel" default="0.5"/>
-    <arg name="heading" default="true"/>
+    <arg name="max_vel" default="1"/>
+    <arg name="heading" default="false"/>
     
     <!-- <arg name="expriment" default="circle_speedup"/>
     <arg name="start_x" default="5"/>
@@ -29,9 +27,9 @@
     <arg name="start_z" default="1"/>
 
     
-    <arg name="hover_x" default="0"/>
+    <arg name="hover_x" default="10"/>
     <arg name="hover_y" default="0"/>
-    <arg name="hover_z" default="5"/>
+    <arg name="hover_z" default="1"/>
 
     <!-- circle
     circle_speedup
@@ -60,8 +58,6 @@
         <param name="start_y" value="$(arg start_y)"/>
         <param name="start_z" value="$(arg start_z)"/>
         <param name="plot" value="$(arg plot)"/>
-        <param name="fit_param" value="$(arg fit_param)"/>
-        <param name="fit_method" value="$(arg fit_method)"/>
         <param name="cost_type" value="$(arg cost_type)"/>
         <param name="need_obs_free" value="$(arg need_obs_free)"/>
         <param name="use_prior" value="$(arg use_prior)"/>

@@ -1,11 +1,23 @@
 # Graduation Project
 
-## Usage
+## Simple Usage
 
-### start simulation env
+#### start simulation env
 roslaunch mpc_ros quadrotor_empty_world.launch
 
-### start MPC node
+### 1. Fit Param
+
+#### start MPC node
+
+roslaunch mpc_ros fit_coeff.launch
+
+#### start trigger
+
+rostopic pub /hummingbird/trigger std_msgs/Empty "{}"
+
+### 2. Tracking
+
+#### start MPC node
 roslaunch mpc_ros test.launch
-### start trigger
+#### start trigger
 rostopic pub /hummingbird/trigger std_msgs/Empty "{}"

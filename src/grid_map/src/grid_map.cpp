@@ -157,7 +157,7 @@ void GridMap::resetBuffer(Eigen::Vector3d min_pos, Eigen::Vector3d max_pos){
 void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg){
   double time = ros::Time::now().toSec();
   md_.has_cloud_ = true;
-  pcl::PointCloud<pcl::PointXYZ> latest_cloud, cloud;
+  pcl::PointCloud<pcl::PointXYZ> latest_cloud, cloud, cloud_vis;
   pcl::fromROSMsg(*msg, latest_cloud);
   if (latest_cloud.points.size() == 0)
     return;
@@ -167,7 +167,7 @@ void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &ms
   Eigen::Vector3d p3d;
 
   int inf_step = ceil(mp_.obstacles_inflation_ / mp_.resolution_);
-  int inf_step_z = 1;
+  int inf_step_z = inf_step;
   
   for (size_t i = 0; i < latest_cloud.points.size(); ++i)
   {
@@ -183,16 +183,18 @@ void GridMap::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &ms
           indexToPos(id, p3d);
           pt2.x = p3d(0), pt2.y = p3d(1), pt2.z = p3d(2);
           cloud.push_back(pt2);
+          if (pt2.z > (inf_step_z + 1) * mp_.resolution_)
+            cloud_vis.push_back(pt2);
         }
 
     // setOccupancy(p3d, 1.0);
   }
-  cloud.width = cloud.points.size();
-  cloud.height = 1;
-  cloud.is_dense = true;
-  cloud.header.frame_id = mp_.frame_id_;
+  cloud_vis.width = cloud_vis.points.size();
+  cloud_vis.height = 1;
+  cloud_vis.is_dense = true;
+  cloud_vis.header.frame_id = mp_.frame_id_;
   sensor_msgs::PointCloud2 cloud_msg;
-  pcl::toROSMsg(cloud, cloud_msg);
+  pcl::toROSMsg(cloud_vis, cloud_msg);
   map_vis_pub_.publish(cloud_msg);
   // add virtual ceiling to limit flight height
   if (mp_.virtual_ceil_height_ > -0.5) {

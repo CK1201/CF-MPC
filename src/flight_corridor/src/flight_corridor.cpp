@@ -5,7 +5,11 @@ namespace flight_corridor
     void FLIGHTCORRIDOR::init(ros::NodeHandle &nh){
         HaveOdom_ = false;
         HaveMap_ = false;
+        Eigen::Vector3d bounding_box;
 
+        nh.param("flight_corridor/bounding_box_x", bounding_box[0], 1.0);
+        nh.param("flight_corridor/bounding_box_y", bounding_box[1], 1.0);
+        nh.param("flight_corridor/bounding_box_z", bounding_box[2], 1.0);
         nh.param("flight_corridor/goal_x", Goal_[0], 0.0); // 目标位置
         nh.param("flight_corridor/goal_y", Goal_[1], 0.0);
         nh.param("flight_corridor/goal_z", Goal_[2], 0.0);
@@ -29,7 +33,7 @@ namespace flight_corridor
         EllipsoidPub_ = nh.advertise<decomp_ros_msgs::EllipsoidArray>("ellipsoid_array", 1, true);
         PolyhedronPub_ = nh.advertise<decomp_ros_msgs::PolyhedronArray>("polyhedron_array", 1, true);
 
-        decomp_util.set_local_bbox(Vec3f(1, 1, 1)); // bounding box x, y, z(in meter)
+        decomp_util.set_local_bbox(Vec3f(bounding_box[0], bounding_box[1], bounding_box[2])); // bounding box x, y, z(in meter)
 
     }
 

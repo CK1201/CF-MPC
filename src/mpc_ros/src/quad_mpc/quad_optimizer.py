@@ -84,7 +84,7 @@ class QuadrotorOptimizer:
             # R = np.eye(nu) / model.RotorSpeed_max
 
             Q = np.diag(np.concatenate((np.ones(3) * 200, np.ones(3) * 1, np.ones(3) * 5, np.ones(3) * 1)))
-            Q[2,2] = 500 # z
+            # Q[2,2] = 500 # z
             Q[8,8] = 200 # yaw
             R = np.eye(nu) * 6 / model.RotorSpeed_max
 
@@ -100,26 +100,27 @@ class QuadrotorOptimizer:
             if self.quadrotorModel.need_obs_free:
                 SafetyWeight = Q[2,2] * 10
                 SafetyCost = 0
-                # for i in range(model.boxVertex.size()[1]):
-                #     cost1 = 0
-                #     cost2 = 0
-                #     for j in range (model.MaxNumOfPolyhedrons):
-                #         APolyhedron = acModel.p[ny + j * 4: ny + j * 4 + 3]
-                #         bPolyhedron = acModel.p[ny + j * 4 + 3]
-                #         cost1 += self.LossFunction(APolyhedron.T @ model.boxVertex[:,i] - bPolyhedron)
-                #         APolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4: ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
-                #         bPolyhedron2 = acModel.p[ny + model.MaxNumOfPolyhedrons + j * 4 + 3]
-                #         cost2 += self.LossFunction(APolyhedron2.T @ model.boxVertex[:,i] - bPolyhedron2)
-                #     # inside 1 corridor
-                #     SafetyCost += cost1
-                #     # inside either 2 corridor
-                #     # SafetyCost += ca.fmin(cost1, cost2)
-
-                for i in range (model.MaxNumOfPolyhedrons):
-                    APolyhedron = acModel.p[ny + i * 4: ny + i * 4 + 3]
-                    bPolyhedron = acModel.p[ny + i * 4 + 3]
-                    for j in range(model.boxVertex.size()[1]):
-                        SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
+                if self.quadrotorModel.useTwoPolyhedron:
+                    for i in range(model.boxVertex.size()[1]):
+                        cost1 = 0
+                        cost2 = 0
+                        for j in range (model.MaxNumOfPolyhedrons):
+                            APolyhedron = acModel.p[ny + j * 4: ny + j * 4 + 3]
+                            bPolyhedron = acModel.p[ny + j * 4 + 3]
+                            cost1 += self.LossFunction(APolyhedron.T @ model.boxVertex[:,i] - bPolyhedron)
+                            APolyhedron2 = acModel.p[ny + (model.MaxNumOfPolyhedrons + j) * 4: ny + (model.MaxNumOfPolyhedrons + j) * 4 + 3]
+                            bPolyhedron2 = acModel.p[ny + (model.MaxNumOfPolyhedrons + j) * 4 + 3]
+                            cost2 += self.LossFunction(APolyhedron2.T @ model.boxVertex[:,i] - bPolyhedron2)
+                        # inside 1 corridor
+                        # SafetyCost += cost1
+                        # inside either 2 corridor
+                        SafetyCost += ca.fmin(cost1, cost2)
+                else:
+                    for i in range (model.MaxNumOfPolyhedrons):
+                        APolyhedron = acModel.p[ny + i * 4: ny + i * 4 + 3]
+                        bPolyhedron = acModel.p[ny + i * 4 + 3]
+                        for j in range(model.boxVertex.size()[1]):
+                            SafetyCost += self.LossFunction(APolyhedron.T @ model.boxVertex[:,j] - bPolyhedron)
                 self.ocp.model.cost_expr_ext_cost += SafetyCost * SafetyWeight
                 self.ocp.model.cost_expr_ext_cost_e += SafetyCost * SafetyWeight
 

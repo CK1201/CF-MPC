@@ -31,11 +31,17 @@ class QuadMPC:
         self.hover_point[0] = rospy.get_param('~hover_x', default='0')
         self.hover_point[1] = rospy.get_param('~hover_y', default='0')
         self.hover_point[2] = rospy.get_param('~hover_z', default='2')
-        self.vel = rospy.get_param('~max_vel', default='0.1')
+        self.max_vel = rospy.get_param('~max_vel', default='0.1')
+        self.w_rate = rospy.get_param('~w_rate', default='0.03')
         self.heading = rospy.get_param('~heading', default='false')
         self.fit_method = rospy.get_param('~fit_method', default='LFS')
         self.cost_type = rospy.get_param('~cost_type', default='EXTERNAL')
-        self.stable_time = rospy.get_param('~stable_time', default='5')
+        if (self.expriment == 'circle' or self.expriment == 'circle_speedup' or self.expriment == 'circle_speedup_stay') and self.start_point[0] < 1:
+            self.start_point[0] = 10
+            self.stable_time = self.max_vel / (2 * self.w_rate * self.start_point[0])
+        else:
+            self.stable_time = rospy.get_param('~stable_time', default='5')
+        self.experiment_time = self.experiment_time + self.stable_time
 
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps'
@@ -554,7 +560,7 @@ class QuadMPC:
                     print("arrive start point")
             return
         elif (not self.finish_tracking):
-            p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, velocity=self.vel, model=self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel, plot=False)
+            p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, velocity=self.max_vel, w_rate=self.w_rate, model=self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel, plot=False)
             error_pose = np.linalg.norm(np.array(self.p) - p[0])
             error_vel  = np.linalg.norm(np.array(self.v_w) - v[0])
             error_q    = np.linalg.norm(diff_between_q_q(np.array(self.q), q[0])[1:])
@@ -589,7 +595,7 @@ class QuadMPC:
         self.runMPC(p=p, v=v, q=q, br=br, u=u, error_pose=error_pose, error_vel=error_vel)
         return
 
-    def getReference(self, experiment, start_point, hover_point, time_now, t_horizon, N_node, velocity, model, plot):
+    def getReference(self, experiment, start_point, hover_point, time_now, t_horizon, N_node, velocity, w_rate, model, plot):
         if start_point is None:
             start_point = np.array([5, 0, 5])
         if abs(self.start_point[0]) < 0.1:
@@ -626,97 +632,32 @@ class QuadMPC:
             # w = 2 # rad/s
             w = velocity / r
             phi = 0
-            p[:, 0] = r * np.cos(w * t + phi)
-            p[:, 1] = r * np.sin(w * t + phi)
-            p[:, 2] = start_point[2]
-            v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
-            v[:, 1] = w ** 1 * r * np.cos(w * t + phi)
-            v[:, 2] = 0
-            a[:, 0] = - w ** 2 * r * np.cos(w * t + phi)
-            a[:, 1] = - w ** 2 * r * np.sin(w * t + phi)
-            a[:, 2] = 0
-            j[:, 0] = w ** 3 * r * np.sin(w * t + phi)
-            j[:, 1] = - w ** 3 * r * np.cos(w * t + phi)
-            j[:, 2] = 0
-            s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
-            s[:, 1] = w ** 4 * r * np.sin(w * t + phi)
-            s[:, 2] = 0
+            [p, v, a, j, s] = self.getRefCircleHor(r, w, phi, t, start_point[2])
         elif experiment == 'circle_speedup_stay':
             w = velocity / r
-            w_rate = 0.03
-            # w = t * w_rate # rad/s
             phi = 0
+            # stable_time = w / w_rate
+            stable_time = velocity / (2 * w_rate * r)
+            stable_phi = w_rate * stable_time ** 2 + phi
 
             for i in range(N_node + 1):
-                if w_rate * t[i] ** 2 < w * t[i]:
-                    p[i, 0] = r * np.cos(w_rate * t[i] ** 2 + phi)
-                    p[i, 1] = r * np.sin(w_rate * t[i] ** 2 + phi)
-                    
-                    v[i, 0] = - 2 * w_rate * t[i] * r * np.sin(w_rate * t[i] ** 2 + phi)
-                    v[i, 1] = 2 * w_rate * t[i] * r * np.cos(w_rate * t[i] ** 2 + phi)
-                    
-                    a[i, 0] = - 2 * w_rate * r * np.sin(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi)
-                    a[i, 1] = 2 * w_rate * r * np.cos(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi)
-                    
-                    j[i, 0] = - 4 * w_rate ** 2 * t[i] * r * np.cos(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * t[i] * r * np.cos(w_rate * t[i] ** 2 + phi) + (2 * w_rate * t[i]) ** 3 * r * np.sin(w_rate * t[i] ** 2 + phi)
-                    j[i, 1] = - 4 * w_rate ** 2 * t[i] * r * np.sin(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * t[i] * r * np.sin(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 3 * r * np.cos(w_rate * t[i] ** 2 + phi)
-                    
-                    s[i, 0] = - 4 * w_rate ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) + 8 * w_rate ** 3 * t[i] ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) + 16 * w_rate ** 3 * t[i] ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) + 6 * (2 * w_rate * t[i]) ** 2 * w_rate * r * np.sin(w_rate * t[i] ** 2 + phi) + (2 * w_rate * t[i]) ** 4 * r * np.cos(w_rate * t[i] ** 2 + phi)
-                    s[i, 1] = - 4 * w_rate ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 3 * t[i] ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) - 8 * w_rate ** 2 * r * np.sin(w_rate * t[i] ** 2 + phi) - 16 * w_rate ** 3 * t[i] ** 2 * r * np.cos(w_rate * t[i] ** 2 + phi) - 6 * (2 * w_rate * t[i]) ** 2 * w_rate * r * np.cos(w_rate * t[i] ** 2 + phi) - (2 * w_rate * t[i]) ** 4 * r * np.sin(w_rate * t[i]** 2 + phi)
+                # if w_rate * t[i] ** 2 < w * t[i]:
+                if t[i] < stable_time:
+                    temp_t = np.ones((1,1)) * t[i]
+                    [p[i], v[i], a[i], j[i], s[i]] = self.getRefCircleSpeedup(r, w_rate, phi, temp_t, start_point[2])
                 else:
-                    p[i, 0] = r * np.cos(w * t[i] + phi)
-                    p[i, 1] = r * np.sin(w * t[i] + phi)
-                    v[i, 0] = - w ** 1 * r * np.sin(w * t[i] + phi)
-                    v[i, 1] = w ** 1 * r * np.cos(w * t[i] + phi)
-                    a[i, 0] = - w ** 2 * r * np.cos(w * t[i] + phi)
-                    a[i, 1] = - w ** 2 * r * np.sin(w * t[i] + phi)
-                    j[i, 0] = w ** 3 * r * np.sin(w * t[i] + phi)
-                    j[i, 1] = - w ** 3 * r * np.cos(w * t[i] + phi)
-                    s[i, 0] = w ** 4 * r * np.cos(w * t[i] + phi)
-                    s[i, 1] = w ** 4 * r * np.sin(w * t[i] + phi)
+                    temp_t = np.ones((1,1)) * (t[i] - stable_time)
+                    [p[i], v[i], a[i], j[i], s[i]] = self.getRefCircleHor(r, w, stable_phi, temp_t, start_point[2])
 
-            p[:, 2] = start_point[2]
-            v[:, 2] = 0
-            a[:, 2] = 0
-            j[:, 2] = 0
-            s[:, 2] = 0
         elif experiment == 'circle_speedup':
-            w_rate = 0.03
-            # w = t * w_rate # rad/s
             phi = 0
-            p[:, 0] = r * np.cos(w_rate * t ** 2 + phi)
-            p[:, 1] = r * np.sin(w_rate * t ** 2 + phi)
-            p[:, 2] = start_point[2]
-            v[:, 0] = - 2 * w_rate * t * r * np.sin(w_rate * t ** 2 + phi)
-            v[:, 1] = 2 * w_rate * t * r * np.cos(w_rate * t ** 2 + phi)
-            v[:, 2] = 0
-            a[:, 0] = - 2 * w_rate * r * np.sin(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 2 * r * np.cos(w_rate * t ** 2 + phi)
-            a[:, 1] = 2 * w_rate * r * np.cos(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 2 * r * np.sin(w_rate * t ** 2 + phi)
-            a[:, 2] = 0
-            j[:, 0] = - 4 * w_rate ** 2 * t * r * np.cos(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * t * r * np.cos(w_rate * t ** 2 + phi) + (2 * w_rate * t) ** 3 * r * np.sin(w_rate * t ** 2 + phi)
-            j[:, 1] = - 4 * w_rate ** 2 * t * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * t * r * np.sin(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 3 * r * np.cos(w_rate * t ** 2 + phi)
-            j[:, 2] = 0
-            s[:, 0] = - 4 * w_rate ** 2 * r * np.cos(w_rate * t ** 2 + phi) + 8 * w_rate ** 3 * t ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * r * np.cos(w_rate * t ** 2 + phi) + 16 * w_rate ** 3 * t ** 2 * r * np.sin(w_rate * t ** 2 + phi) + 6 * (2 * w_rate * t) ** 2 * w_rate * r * np.sin(w_rate * t ** 2 + phi) + (2 * w_rate * t) ** 4 * r * np.cos(w_rate * t ** 2 + phi)
-            s[:, 1] = - 4 * w_rate ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 3 * t ** 2 * r * np.cos(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 16 * w_rate ** 3 * t ** 2 * r * np.cos(w_rate * t ** 2 + phi) - 6 * (2 * w_rate * t) ** 2 * w_rate * r * np.cos(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 4 * r * np.sin(w_rate * t ** 2 + phi)
-            s[:, 2] = 0
+            [p, v, a, j, s] = self.getRefCircleSpeedup(r, w_rate, phi, t, start_point[2])
+            
         elif experiment == 'circle_vertical':
             w = 1 # rad/s
             phi = 0
-            p[:, 0] = r * np.cos(w * t + phi)
-            p[:, 1] = 0
-            p[:, 2] = start_point[2] + r * np.sin(w * t + phi)
-            v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
-            v[:, 1] = 0
-            v[:, 2] = w ** 1 * r * np.cos(w * t + phi)
-            a[:, 0] = - w ** 2 * r * np.cos(w * t + phi)
-            a[:, 1] = 0
-            a[:, 2] = - w ** 2 * r * np.sin(w * t + phi)
-            j[:, 0] = w ** 3 * r * np.sin(w * t + phi)
-            j[:, 1] = 0
-            j[:, 2] = - w ** 3 * r * np.cos(w * t + phi)
-            s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
-            s[:, 1] = 0
-            s[:, 2] = w ** 4 * r * np.sin(w * t + phi)
+            [p, v, a, j, s] = self.getRefCircleVert(r, w, phi, t, start_point[2])
+            
         elif experiment == 'lemniscate':
             w = 0.5
             phi = 0
@@ -773,8 +714,6 @@ class QuadMPC:
         q, euler_angle, br, u = getReference_Quaternion_Bodyrates_RotorSpeed(v=v, a=a, j=j, s=s, yaw=yaw, yawdot=yawdot, yawdotdot=yawdotdot, model=model, dt=dt)
 
         if plot:
-            # print(np.sqrt(np.array([4,9,16,2])))
-            # print(np.linalg.inv(model.G))
             N_node = len(p)
             p_sim = np.zeros((N_node, 3))
             p_sim[0] = p[0]
@@ -918,6 +857,75 @@ class QuadMPC:
         self.mpc_ref_vis_pub.publish(mpc_ref)
 
         return p, v, q, br, u
+
+    def getRefCircleHor(self, r, w, phi, t, height):
+        p = np.zeros((len(t), 3))
+        v = np.zeros((len(t), 3))
+        a = np.zeros((len(t), 3))
+        j = np.zeros((len(t), 3))
+        s = np.zeros((len(t), 3))
+        p[:, 0] = r * np.cos(w * t + phi)
+        p[:, 1] = r * np.sin(w * t + phi)
+        p[:, 2] = height
+        v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
+        v[:, 1] = w ** 1 * r * np.cos(w * t + phi)
+        v[:, 2] = 0
+        a[:, 0] = - w ** 2 * r * np.cos(w * t + phi)
+        a[:, 1] = - w ** 2 * r * np.sin(w * t + phi)
+        a[:, 2] = 0
+        j[:, 0] = w ** 3 * r * np.sin(w * t + phi)
+        j[:, 1] = - w ** 3 * r * np.cos(w * t + phi)
+        j[:, 2] = 0
+        s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
+        s[:, 1] = w ** 4 * r * np.sin(w * t + phi)
+        s[:, 2] = 0
+        return [p, v, a, j, s]
+
+    def getRefCircleVert(self, r, w, phi, t, height):
+        p = np.zeros((len(t), 3))
+        v = np.zeros((len(t), 3))
+        a = np.zeros((len(t), 3))
+        j = np.zeros((len(t), 3))
+        s = np.zeros((len(t), 3))
+        p[:, 0] = r * np.cos(w * t + phi)
+        p[:, 1] = 0
+        p[:, 2] = height + r * np.sin(w * t + phi)
+        v[:, 0] = - w ** 1 * r * np.sin(w * t + phi)
+        v[:, 1] = 0
+        v[:, 2] = w ** 1 * r * np.cos(w * t + phi)
+        a[:, 0] = - w ** 2 * r * np.cos(w * t + phi)
+        a[:, 1] = 0
+        a[:, 2] = - w ** 2 * r * np.sin(w * t + phi)
+        j[:, 0] = w ** 3 * r * np.sin(w * t + phi)
+        j[:, 1] = 0
+        j[:, 2] = - w ** 3 * r * np.cos(w * t + phi)
+        s[:, 0] = w ** 4 * r * np.cos(w * t + phi)
+        s[:, 1] = 0
+        s[:, 2] = w ** 4 * r * np.sin(w * t + phi)
+        return [p, v, a, j, s]
+
+    def getRefCircleSpeedup(self, r, w_rate, phi, t, height):
+        p = np.zeros((len(t), 3))
+        v = np.zeros((len(t), 3))
+        a = np.zeros((len(t), 3))
+        j = np.zeros((len(t), 3))
+        s = np.zeros((len(t), 3))
+        p[:, 0] = r * np.cos(w_rate * (t ** 2) + phi)
+        p[:, 1] = r * np.sin(w_rate * (t ** 2) + phi)
+        p[:, 2] = height
+        v[:, 0] = - 2 * w_rate * t * r * np.sin(w_rate * t ** 2 + phi)
+        v[:, 1] = 2 * w_rate * t * r * np.cos(w_rate * t ** 2 + phi)
+        v[:, 2] = 0
+        a[:, 0] = - 2 * w_rate * r * np.sin(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 2 * r * np.cos(w_rate * t ** 2 + phi)
+        a[:, 1] = 2 * w_rate * r * np.cos(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 2 * r * np.sin(w_rate * t ** 2 + phi)
+        a[:, 2] = 0
+        j[:, 0] = - 4 * w_rate ** 2 * t * r * np.cos(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * t * r * np.cos(w_rate * t ** 2 + phi) + (2 * w_rate * t) ** 3 * r * np.sin(w_rate * t ** 2 + phi)
+        j[:, 1] = - 4 * w_rate ** 2 * t * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * t * r * np.sin(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 3 * r * np.cos(w_rate * t ** 2 + phi)
+        j[:, 2] = 0
+        s[:, 0] = - 4 * w_rate ** 2 * r * np.cos(w_rate * t ** 2 + phi) + 8 * w_rate ** 3 * t ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * r * np.cos(w_rate * t ** 2 + phi) + 16 * w_rate ** 3 * t ** 2 * r * np.sin(w_rate * t ** 2 + phi) + 6 * (2 * w_rate * t) ** 2 * w_rate * r * np.sin(w_rate * t ** 2 + phi) + (2 * w_rate * t) ** 4 * r * np.cos(w_rate * t ** 2 + phi)
+        s[:, 1] = - 4 * w_rate ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 8 * w_rate ** 3 * t ** 2 * r * np.cos(w_rate * t ** 2 + phi) - 8 * w_rate ** 2 * r * np.sin(w_rate * t ** 2 + phi) - 16 * w_rate ** 3 * t ** 2 * r * np.cos(w_rate * t ** 2 + phi) - 6 * (2 * w_rate * t) ** 2 * w_rate * r * np.cos(w_rate * t ** 2 + phi) - (2 * w_rate * t) ** 4 * r * np.sin(w_rate * t ** 2 + phi)
+        s[:, 2] = 0
+        return [p, v, a, j, s]
 
     def runMPC(self, p, v, q, br, u, error_pose, error_vel):
         self.setReference(p=p, v=v, q=q, br=br, u=u)

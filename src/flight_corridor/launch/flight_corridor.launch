@@ -1,6 +1,8 @@
 <launch>
     <arg name="quad_name" default="hummingbird"/>
-
+    <arg name="flight_corridor/bounding_box_x" default="1.0"/>
+    <arg name="flight_corridor/bounding_box_y" default="1.0"/>
+    <arg name="flight_corridor/bounding_box_z" default="1.0"/>
     <arg name="flight_corridor/goal_x" default="10.1"/>
     <arg name="flight_corridor/goal_y" default="0.5"/>
     <arg name="flight_corridor/goal_z" default="0.5"/>
@@ -13,7 +15,7 @@
     <arg name="grid_map/local_update_range_x" default="5.5"/>
     <arg name="grid_map/local_update_range_y" default="5.5"/>
     <arg name="grid_map/local_update_range_z" default="4.5"/>
-    <arg name="grid_map/obstacles_inflation" default="0.2"/>
+    <arg name="grid_map/obstacles_inflation" default="0.0"/>
     <!-- camera parameter -->
     <arg name="grid_map/fx" default="462.1379699707031"/>
     <arg name="grid_map/fy" default="462.1379699707031"/>
@@ -59,6 +61,9 @@
     </include>
 
     <node pkg="flight_corridor" type="flight_corridor_node" name="flight_corridor_node" output="screen">
+        <param name="flight_corridor/bounding_box_x" value="$(arg flight_corridor/bounding_box_x)"/>
+        <param name="flight_corridor/bounding_box_y" value="$(arg flight_corridor/bounding_box_y)"/>
+        <param name="flight_corridor/bounding_box_z" value="$(arg flight_corridor/bounding_box_z)"/>
         <param name="flight_corridor/goal_x" value="$(arg flight_corridor/goal_x)"/>
         <param name="flight_corridor/goal_y" value="$(arg flight_corridor/goal_y)"/>
         <param name="flight_corridor/goal_z" value="$(arg flight_corridor/goal_z)"/>
