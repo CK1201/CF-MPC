@@ -6,8 +6,8 @@
     <arg name="heading" default="true"/>
     
     <arg name="expriment" default="circle_speedup_stay"/>
-    <arg name="experiment_time" default="20"/>
-    <arg name="max_vel" default="10"/>
+    <arg name="experiment_time" default="24"/>
+    <arg name="max_vel" default="11"/>
     <arg name="w_rate" default="0.05"/>
     <arg name="start_x" default="10"/>
     <arg name="start_y" default="0"/>

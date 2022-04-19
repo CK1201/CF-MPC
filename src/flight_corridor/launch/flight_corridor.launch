@@ -1,12 +1,13 @@
 <launch>
     <arg name="quad_name" default="hummingbird"/>
-    <arg name="flight_corridor/bounding_box_x" default="1.0"/>
-    <arg name="flight_corridor/bounding_box_y" default="1.0"/>
-    <arg name="flight_corridor/bounding_box_z" default="1.0"/>
+    <arg name="flight_corridor/bounding_box_x" default="1"/>
+    <arg name="flight_corridor/bounding_box_y" default="1"/>
+    <arg name="flight_corridor/bounding_box_z" default="0.5"/>
     <arg name="flight_corridor/goal_x" default="10.1"/>
     <arg name="flight_corridor/goal_y" default="0.5"/>
     <arg name="flight_corridor/goal_z" default="0.5"/>
     <arg name="flight_corridor/use_jps" default="true"/>
+    <arg name="flight_corridor/use_prior" default="true"/>
 
     <arg name="grid_map/resolution" default="0.1"/>
     <arg name="grid_map/map_size_x" default="32.0"/>
@@ -15,7 +16,7 @@
     <arg name="grid_map/local_update_range_x" default="5.5"/>
     <arg name="grid_map/local_update_range_y" default="5.5"/>
     <arg name="grid_map/local_update_range_z" default="4.5"/>
-    <arg name="grid_map/obstacles_inflation" default="0.0"/>
+    <arg name="grid_map/obstacles_inflation" default="0.1"/>
     <!-- camera parameter -->
     <arg name="grid_map/fx" default="462.1379699707031"/>
     <arg name="grid_map/fy" default="462.1379699707031"/>
@@ -68,6 +69,7 @@
         <param name="flight_corridor/goal_y" value="$(arg flight_corridor/goal_y)"/>
         <param name="flight_corridor/goal_z" value="$(arg flight_corridor/goal_z)"/>
         <param name="flight_corridor/use_jps" value="$(arg flight_corridor/use_jps)"/>
+        <param name="flight_corridor/use_prior" value="$(arg flight_corridor/use_prior)"/>
 
         <param name="grid_map/resolution" value="$(arg grid_map/resolution)"/>
         <param name="grid_map/map_size_x" value="$(arg grid_map/map_size_x)"/>

@@ -34,14 +34,21 @@ namespace flight_corridor
 {
     class FLIGHTCORRIDOR{
     private:
-        bool HaveOdom_, HaveMap_, UseJPS_;
+        bool HaveOdom_, HaveMap_, UseJPS_, UsePrior_, HavePoly_, HaveMapVis_;
         /* parameters */
+        int pt_num_ = 0;
+        double last_poly_time_;
         Eigen::Vector3d Goal_;
         vec_Vec3f Path_;
-        sensor_msgs::PointCloud2 PointCloudRaw_, OctoMapCenter_, GridMapInf_;
+        sensor_msgs::PointCloud GridMapVis_;
+        sensor_msgs::PointCloud2 PointCloudRaw_, OctoMapCenter_;
         nav_msgs::Odometry QuadOdom_;
         octomap::OcTree* OctoMap_;
         EllipsoidDecomp3D decomp_util;
+        vec_E<Polyhedron<3>> Polyhedrons_;
+        nav_msgs::Path PathMsg_;
+        decomp_ros_msgs::PolyhedronArray PolyhedronMsg_;
+        decomp_ros_msgs::EllipsoidArray EllipsoidMsg_;
 
         GridMap::Ptr GridMap_;
         GridNodePtr *** GridNodeMap_;
@@ -50,7 +57,7 @@ namespace flight_corridor
         
         /* ROS utils */
         ros::Timer ExecTimer_;
-        ros::Subscriber OdomSub_, PointCloudRawSub_, OctoMapSub_, OctoMapCenterSub_, GridMapInfSub_;
+        ros::Subscriber OdomSub_, PointCloudRawSub_, OctoMapSub_, OctoMapCenterSub_, GridMapInfSub_, GridMapVisSub_;
         ros::Publisher PointCloudPub_, PathPub_, EllipsoidPub_, PolyhedronPub_;
 
         /* ROS functions */
@@ -59,13 +66,15 @@ namespace flight_corridor
         void OctoMapCallback(const octomap_msgs::Octomap::ConstPtr &msg);
         void OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
         void GridMapInfCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
+        void GridMapVisCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
 
         /* Other functions */
-        vec_Vec3f getPath(Eigen::Vector3d start, Eigen::Vector3d goal, bool use_jps);
-        vec_Vec3f JPSPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
+        // vec_Vec3f getPath(Eigen::Vector3d start, Eigen::Vector3d goal);
+        vec_Vec3f Plan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
         std::vector<Eigen::Vector3i> AStarPlan(Eigen::Vector3d Start, Eigen::Vector3d Goal);
         double getHeu(GridNodePtr node1, GridNodePtr node2);
         void AstarGetSucc(GridNodePtr currentPtr, vector<GridNodePtr> &neighborPtrSets, vector<double> &edgeCostSets);
+        bool checkCollision();
 
     public:
         FLIGHTCORRIDOR(/* args */){}

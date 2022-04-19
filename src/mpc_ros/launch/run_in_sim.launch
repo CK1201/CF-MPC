@@ -1,47 +1,48 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <arg name="with_drag" default="false"/>
+    <arg name="with_drag" default="true"/>
     <arg name="cost_type" default="EXTERNAL"/>   <!-- obs_free needs cost_type to be EXTERNAL.  EXTERNAL, LINEAR_LS -->
-    <arg name="need_obs_free" default="true"/>
+    <arg name="need_collision_free" default="false"/>
     <arg name="experiment_time" default="38"/>
     <arg name="experiment_times" default="4"/>
     <arg name="plot" default="false"/>
     <arg name="use_prior" default="false"/>
     <arg name="use_jps" default="true"/>
-    <arg name="max_vel" default="1"/>
-    <arg name="heading" default="false"/>
+    <arg name="max_vel" default="12.0"/>
+    <arg name="heading" default="true"/>
     
-    <!-- <arg name="expriment" default="circle_speedup"/>
-    <arg name="start_x" default="5"/>
+    <arg name="expriment" default="circle_speedup_stay"/>
+    <arg name="start_x" default="10"/>
     <arg name="start_y" default="0"/>
-    <arg name="start_z" default="10"/> -->
+    <arg name="start_z" default="10"/>
 
     <!-- <arg name="expriment" default="circle_vertical"/>
     <arg name="start_x" default="5"/>
     <arg name="start_y" default="0"/>
     <arg name="start_z" default="10"/> -->
     
-    <arg name="expriment" default="hover"/>
+    <!-- <arg name="expriment" default="hover"/>
     <arg name="start_x" default="0"/>
     <arg name="start_y" default="0"/>
-    <arg name="start_z" default="1"/>
+    <arg name="start_z" default="1"/> -->
 
-    
     <arg name="hover_x" default="10"/>
     <arg name="hover_y" default="0"/>
     <arg name="hover_z" default="1"/>
 
     <!-- circle
     circle_speedup
+    circle_speedup_stay
     hover 
     lemniscate
     lemniscate_speedup -->
-    <group if="$(arg need_obs_free)">
+    <group if="$(arg need_collision_free)">
         <include file="$(find flight_corridor)/launch/flight_corridor.launch">
             <arg name="flight_corridor/goal_x" value="$(arg hover_x)"/>
             <arg name="flight_corridor/goal_y" value="$(arg hover_y)"/>
             <arg name="flight_corridor/goal_z" value="$(arg hover_z)"/>
             <arg name="flight_corridor/use_jps" value="$(arg use_jps)"/>
+            <arg name="flight_corridor/use_prior" value="$(arg use_prior)"/>
         </include>
     </group>
 
@@ -59,7 +60,7 @@
         <param name="start_z" value="$(arg start_z)"/>
         <param name="plot" value="$(arg plot)"/>
         <param name="cost_type" value="$(arg cost_type)"/>
-        <param name="need_obs_free" value="$(arg need_obs_free)"/>
+        <param name="need_collision_free" value="$(arg need_collision_free)"/>
         <param name="use_prior" value="$(arg use_prior)"/>
         <param name="max_vel" value="$(arg max_vel)"/>
         <param name="heading" value="$(arg heading)"/>

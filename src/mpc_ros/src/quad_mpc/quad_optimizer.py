@@ -5,7 +5,7 @@ from src.utils.utils import *
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 
 class QuadrotorOptimizer:
-    def __init__(self, Tf, N, quadrotorModel, cost_type, num) -> None:
+    def __init__(self, Tf, N, quadrotorModel, cost_type, num=0) -> None:
         self.ocp = AcadosOcp()
         # acados_solver = AcadosOcpSolver(ocp)
         acados_source_path = os.environ['ACADOS_SOURCE_DIR']
@@ -97,7 +97,7 @@ class QuadrotorOptimizer:
             self.ocp.model.cost_expr_ext_cost = ca.vertcat(diff_state, diff_input).T @ scipy.linalg.block_diag(Q, R) @ ca.vertcat(diff_state, diff_input)
             self.ocp.model.cost_expr_ext_cost_e = diff_state.T @ Q @ diff_state
 
-            if self.quadrotorModel.need_obs_free:
+            if self.quadrotorModel.need_collision_free:
                 SafetyWeight = Q[2,2] * 10
                 SafetyCost = 0
                 if self.quadrotorModel.useTwoPolyhedron:

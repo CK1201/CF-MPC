@@ -18,6 +18,6 @@ rostopic pub /hummingbird/trigger std_msgs/Empty "{}"
 ### 2. Tracking
 
 #### start MPC node
-roslaunch mpc_ros test.launch
+roslaunch mpc_ros run_in_sim.launch
 #### start trigger
 rostopic pub /hummingbird/trigger std_msgs/Empty "{}"

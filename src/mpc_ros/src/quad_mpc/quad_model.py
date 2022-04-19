@@ -4,7 +4,7 @@ import numpy as np
 from src.utils.utils import *
 
 class QuadrotorModel:
-    def __init__(self, quad_name='hummingbird', configuration='+', Drag_D=np.zeros((3, 3)), Drag_kh=0, Drag_A=np.zeros((3, 3)), Drag_B=np.zeros((3, 3)), need_obs_free=False, useTwoPolyhedron=False) -> None:
+    def __init__(self, quad_name='hummingbird', configuration='+', Drag_D=np.zeros((3, 3)), Drag_kh=0, Drag_A=np.zeros((3, 3)), Drag_B=np.zeros((3, 3)), need_collision_free=False, useTwoPolyhedron=False) -> None:
 
         this_path = os.path.dirname(os.path.realpath(__file__))
         params_file = os.path.join(this_path, '..', '..', 'xacro', quad_name + '.xacro')
@@ -30,7 +30,7 @@ class QuadrotorModel:
         self.kh = Drag_kh
         self.A = Drag_A
         self.B = Drag_B
-        self.need_obs_free = need_obs_free
+        self.need_collision_free = need_collision_free
         self.useTwoPolyhedron = useTwoPolyhedron
         self.Inertia = np.array([
             [float(attrib['body_inertia'][0]['ixx']), float(attrib['body_inertia'][0]['ixy']), float(attrib['body_inertia'][0]['ixz'])],
@@ -96,14 +96,14 @@ class QuadrotorModel:
         # z = ca.vertcat([])
 
         # parameters
-        if self.need_obs_free:
+        if self.need_collision_free:
             self.model.MaxNumOfPolyhedrons = 10
-            if useTwoPolyhedron:
-                param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4 * 2, 1)
-            else:
-                param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
         else:
             self.model.MaxNumOfPolyhedrons = 0
+        if useTwoPolyhedron:
+            param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4 * 2, 1)
+        else:
+            param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
 
         
 
