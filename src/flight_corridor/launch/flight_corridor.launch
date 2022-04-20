@@ -16,7 +16,7 @@
     <arg name="grid_map/local_update_range_x" default="5.5"/>
     <arg name="grid_map/local_update_range_y" default="5.5"/>
     <arg name="grid_map/local_update_range_z" default="4.5"/>
-    <arg name="grid_map/obstacles_inflation" default="0.1"/>
+    <arg name="grid_map/obstacles_inflation" default="0.0"/>
     <!-- camera parameter -->
     <arg name="grid_map/fx" default="462.1379699707031"/>
     <arg name="grid_map/fy" default="462.1379699707031"/>

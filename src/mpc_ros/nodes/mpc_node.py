@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.6
 from math import sqrt, pi
-import rospy, std_msgs.msg, message_filters, os, yaml
+import rospy, std_msgs.msg, message_filters, os, yaml, math
 import numpy as np
 from std_msgs.msg import Bool
 from nav_msgs.msg import Odometry, Path
@@ -45,6 +45,8 @@ class QuadMPC:
         rospy.init_node("mpc_node")
         quad_name = rospy.get_param('~quad_name', default='hummingbird')
         self.with_drag = rospy.get_param('~with_drag', default='false')
+        self.drag_coeff_type = rospy.get_param('~drag_coeff_type', default='LFS')
+        self.fit_file_num = str(rospy.get_param('~fit_file_num', default='1'))
         self.expriment = rospy.get_param('~expriment', default='hover')
         self.experiment_time = rospy.get_param('~experiment_time', default='35')
         self.experiment_times = rospy.get_param('~experiment_times', default='1')
@@ -65,8 +67,13 @@ class QuadMPC:
         self.useTwoPolyhedron = True
         self.selectStrategy = "one" # all one pred_one (inside)
         self.need_sim = False
+        self.w_rate = 0.05
 
-        
+        if (self.expriment == 'circle_speedup_stay') and self.start_point[0] < 1:
+            # self.start_point[0] = 10
+            self.stable_time = self.max_vel / (2 * self.w_rate * self.start_point[0])
+        else:
+            self.stable_time = -5
 
         if self.cost_type == "LINEAR_LS" and self.need_collision_free:
             rospy.logwarn("cost type: LINEAR_LS can not be collision free!!! set cost type as EXTERNAL.")
@@ -102,13 +109,13 @@ class QuadMPC:
         result_dir = dir_path + '/../result'
         # mesh_dir = dir_path + '/../mesh'
         self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
-        self.yaml_file = os.path.join(config_dir, quad_name + '.yaml')
+        self.yaml_file = os.path.join(config_dir, quad_name + '_' + self.drag_coeff_type + '_' + self.fit_file_num + '.yaml')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
         self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
-        Drag_A = np.zeros((3, 3))
         if not(self.with_drag):
             Drag_D = np.zeros((3, 3))
             Drag_kh = 0
+            Drag_A = np.zeros((3, 3))
             Drag_B = np.zeros((3, 3))
         else:
             try:
@@ -116,6 +123,7 @@ class QuadMPC:
                     config = yaml.load(file)
                     Drag_D = np.diag([config["D_dx"], config["D_dy"], config["D_dz"]])
                     Drag_kh = config["kh"]
+                    Drag_A = np.zeros((3, 3))
                     Drag_A[0, 1] = config["D_ax"]
                     Drag_A[1, 0] = config["D_ay"]
                     Drag_B = np.diag([config["D_bx"], config["D_by"], config["D_bz"]])
@@ -125,8 +133,12 @@ class QuadMPC:
                 rospy.logwarn(warn_msg)
                 Drag_D = np.zeros((3, 3))
                 Drag_kh = 0
+                Drag_A = np.zeros((3, 3))
                 Drag_B = np.zeros((3, 3))
         print(Drag_D)
+        print(Drag_kh)
+        print(Drag_A)
+        print(Drag_B)
         # load model
         self.quadrotorOptimizer = QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D, Drag_kh=Drag_kh, Drag_A=Drag_A, Drag_B=Drag_B, need_collision_free=self.need_collision_free, useTwoPolyhedron=self.useTwoPolyhedron), cost_type=self.cost_type)
 
@@ -227,6 +239,7 @@ class QuadMPC:
                 else:
                     print("max error : ", self.pose_error_max)
                     print("mean error: ", self.pose_error_mean)
+                    print("rmse error: ", self.pose_error_rmse)
                     print("max v_w   : ", self.max_v_w)
                     print("max motor : ", self.max_motor_speed)
 
@@ -409,16 +422,14 @@ class QuadMPC:
                 cmd.header.stamp = rospy.Time.now()
                 cmd.pose.position.x, cmd.pose.position.y, cmd.pose.position.z = self.start_point[0], self.start_point[1], self.start_point[2]
                 if self.expriment != "hover":
-                    cmd.pose.orientation.w, cmd.pose.orientation.x, cmd.pose.orientation.y, cmd.pose.orientation.z = sqrt(2) / 2, 0, 0, sqrt(2) / 2
+                    yaw = math.pi / 2
+                    cmd.pose.orientation.w, cmd.pose.orientation.x, cmd.pose.orientation.y, cmd.pose.orientation.z = math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)
                 self.control_pose_pub.publish(cmd)
                 rospy.sleep(1.0)
-                # if self.ap_state != AutopilotFeedback().HOVER:
-                if self.ap_state == AutopilotFeedback().TRAJECTORY_CONTROL:
+                if self.ap_state == AutopilotFeedback().TRAJECTORY_CONTROL or (np.linalg.norm(np.array(self.p) - self.start_point) < 0.1):
                     self.have_reach_start_point_cmd = True
-                    # rospy.sleep(5.0)
                 else:
                     return
-            # if (self.ap_state == AutopilotFeedback().HOVER):
             if (self.ap_state == AutopilotFeedback().HOVER) and (np.linalg.norm(np.array(self.p) - self.start_point) < 0.1):
                 self.reach_times += 1
                 if self.reach_times > 50:
@@ -441,7 +452,8 @@ class QuadMPC:
                     cmd.header.stamp = rospy.Time.now()
                     cmd.pose.position.x, cmd.pose.position.y, cmd.pose.position.z = self.start_point[0], self.start_point[1], self.start_point[2]
                     if self.expriment != "hover":
-                        cmd.pose.orientation.w, cmd.pose.orientation.x, cmd.pose.orientation.y, cmd.pose.orientation.z = sqrt(2) / 2, 0, 0, sqrt(2) / 2
+                        yaw = math.pi / 2
+                        cmd.pose.orientation.w, cmd.pose.orientation.x, cmd.pose.orientation.y, cmd.pose.orientation.z = math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)
                     self.control_pose_pub.publish(cmd)
                     rospy.sleep(1.0)
             return
@@ -451,9 +463,17 @@ class QuadMPC:
             error_vel  = np.linalg.norm(np.array(self.v_w) - v[0])
             error_q    = np.linalg.norm(np.array(self.q) - q[0])
             error_br   = np.linalg.norm(np.array(self.w) - br[0])
-            self.pose_error[self.experiment_times_current] += error_pose
-            self.pose_error_square[self.experiment_times_current] += error_pose ** 2
-            self.pose_error_num += 1
+            # if self.expriment != 'circle_speedup_stay':
+            #     self.pose_error[self.experiment_times_current] += error_pose
+            #     self.pose_error_square[self.experiment_times_current] += error_pose ** 2
+            #     self.pose_error_num += 1
+            if rospy.Time.now().to_sec() - self.begin_time > self.stable_time + 5:
+                self.pose_error[self.experiment_times_current] += error_pose
+                self.pose_error_square[self.experiment_times_current] += error_pose ** 2
+                self.pose_error_num += 1
+            # self.pose_error[self.experiment_times_current] += error_pose
+            # self.pose_error_square[self.experiment_times_current] += error_pose ** 2
+            # self.pose_error_num += 1
             self.pose_error_max[self.experiment_times_current] = max(self.pose_error_max[self.experiment_times_current], error_pose)
             if self.expriment == 'hover':
                 if (np.linalg.norm(np.array(self.p) - self.hover_point) < 0.05):
@@ -462,6 +482,8 @@ class QuadMPC:
                         self.finish_tracking = True
                         self.reach_times = 0    
             elif rospy.Time.now().to_sec() - self.begin_time >= self.experiment_time:
+                self.finish_tracking = True
+            elif (self.pose_error_max[self.experiment_times_current] > 2.1):
                 self.finish_tracking = True
         else:
             self.trigger = False
@@ -498,44 +520,52 @@ class QuadMPC:
         dt = t[1] - t[0]
         
         if experiment == 'hover':
-            timeAll = np.linalg.norm((hover_point - start_point)) / velocity
+            dist = np.linalg.norm((hover_point - start_point))
+            vel = (hover_point - start_point) / dist * velocity
+            timeAll = dist / velocity
             temp_t = np.concatenate((t[np.newaxis,:] / timeAll, np.ones((1, N_node + 1))), axis=0)
             temp_t = temp_t.min(0)[:,np.newaxis]
             temp_t = np.repeat(temp_t, repeats=3, axis=1)
             temp_p = (hover_point - start_point)[np.newaxis,:]
             temp_p = np.repeat(temp_p, repeats=N_node + 1, axis=0)
             p = temp_t * temp_p + np.repeat(start_point[np.newaxis,:], repeats=N_node + 1, axis=0)
+
+            for i in range(N_node + 1):
+                if t[i] < timeAll:
+                    v[i] = vel
+                else:
+                    v[i] = 0
             # p[:, 0] = temp[0]
             # p[:, 1] = temp[1]
             # p[:, 2] = temp[2]
             # p = np.repeat(hover_point[np.newaxis,:], repeats=N_node + 1, axis=0)
-            yaw[:, 0] = pi
-            # print(p)
+
         elif experiment == 'circle':
             # w = 2 # rad/s
             w = velocity / r
             phi = 0
             [p, v, a, j, s] = self.getRefCircleHor(r, w, phi, t, start_point[2])
+
         elif experiment == 'circle_speedup_stay':
             w = velocity / r
-            w_rate = 0.03
+            w_rate = self.w_rate
             # w = t * w_rate # rad/s
             phi = 0
             # stable_time = w / w_rate
-            stable_time = velocity / (2 * w_rate * r)
-            stable_phi = w_rate * stable_time ** 2 + phi
+            self.stable_time = velocity / (2 * w_rate * r)
+            stable_phi = w_rate * self.stable_time ** 2 + phi
 
             for i in range(N_node + 1):
                 # if w_rate * t[i] ** 2 < w * t[i]:
-                if t[i] < stable_time:
+                if t[i] < self.stable_time:
                     temp_t = np.ones((1,1)) * t[i]
                     [p[i], v[i], a[i], j[i], s[i]] = self.getRefCircleSpeedup(r, w_rate, phi, temp_t, start_point[2])
                 else:
-                    temp_t = np.ones((1,1)) * (t[i] - stable_time)
+                    temp_t = np.ones((1,1)) * (t[i] - self.stable_time)
                     [p[i], v[i], a[i], j[i], s[i]] = self.getRefCircleHor(r, w, stable_phi, temp_t, start_point[2])
 
         elif experiment == 'circle_speedup':
-            w_rate = 0.03
+            w_rate = self.w_rate
             phi = 0
             [p, v, a, j, s] = self.getRefCircleSpeedup(r, w_rate, phi, t, start_point[2])
             
@@ -543,6 +573,7 @@ class QuadMPC:
             w = 1 # rad/s
             phi = 0
             [p, v, a, j, s] = self.getRefCircleVert(r, w, phi, t, start_point[2])
+
         elif experiment == 'lemniscate':
             w = 0.5
             phi = 0
@@ -550,6 +581,7 @@ class QuadMPC:
             p[:, 0] = - r * np.cos(theta) * np.sin(theta) / (1 + np.sin(theta) ** 2)
             p[:, 1] = r * np.cos(theta) / (1 + np.sin(theta) ** 2)
             p[:, 2] = start_point[2]
+
         elif experiment == 'lemniscate_speedup':
             w_rate = 0.02
             phi = np.pi / 2

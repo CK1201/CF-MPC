@@ -18,17 +18,19 @@ import numpy as np
 # print(dp)
 # print(dp * a)
 
+# 4：5m/s
+# 5：10m/s
+# 6：15m/s
+# 7：17m/s
 
-
-
-
-fit_size = 5
+drag_file = '../../config/NM_coeff_5.npz'
+fit_size = 10
 A = np.zeros((fit_size,3,3))
 B = np.zeros((fit_size,3,3))
 D = np.zeros((fit_size,3,3))
 A_coeff = np.random.rand(fit_size,2) * 0.01
 B_coeff = np.random.rand(fit_size,3) * 0.01
-D_coeff = np.random.rand(fit_size,3) * 0.2
+D_coeff = np.random.rand(fit_size,3) * 0.3
 D_coeff[:,2] = D_coeff[:,2] * 0.1
 kh = np.random.rand(fit_size,1) * 0.01
 for i in range(fit_size):
@@ -36,7 +38,19 @@ for i in range(fit_size):
     A[i, 1, 0] = A_coeff[i, 1]
     B[i] = np.diag(B_coeff[i])
     D[i] = np.diag(D_coeff[i])
-np.savez('../../config/Drag_coeff.npz',A=A,B=B,D=D,kh=kh)
+np.savez(drag_file,A=A,B=B,D=D,kh=kh)
+
+
+# Drag = np.load('../../config/NM_coeff_2_all_for_now_.npz')
+# Drag_D  = Drag['D']
+# Drag_kh = Drag['kh']
+# Drag_A  = Drag['A']
+# Drag_B  = Drag['B']
+# print(Drag_D[0])
+# print(Drag_kh[0])
+# print(Drag_A[0])
+# print(Drag_B[0])
+# print(np.sum(Drag_A[0], axis=1)[:2])
  
 # Drag = np.load('../../config/Drag_coeff.npz')
 # print(Drag['A'])

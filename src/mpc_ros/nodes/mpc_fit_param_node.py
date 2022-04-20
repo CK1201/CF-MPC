@@ -31,6 +31,7 @@ class QuadMPC:
         self.w_rate = rospy.get_param('~w_rate', default='0.03')
         self.heading = rospy.get_param('~heading', default='false')
         self.fit_method = rospy.get_param('~fit_method', default='LFS')
+        self.fit_file_num = str(rospy.get_param('~fit_file_num', default='1'))
         self.cost_type = rospy.get_param('~cost_type', default='EXTERNAL')
         if (self.expriment == 'circle' or self.expriment == 'circle_speedup' or self.expriment == 'circle_speedup_stay') and self.start_point[0] < 1:
             self.start_point[0] = 10
@@ -61,9 +62,13 @@ class QuadMPC:
         config_dir = dir_path + '/../config'
         result_dir = dir_path + '/../result'
         # mesh_dir = dir_path + '/../mesh'
+        NM_file = 'NM_coeff_' + self.fit_file_num
         self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
-        self.yaml_file = os.path.join(config_dir, quad_name + 'NM.yaml')
-        self.drag_file = os.path.join(config_dir, 'Drag_coeff' + '.npz')
+        self.yaml_file = os.path.join(config_dir, quad_name + '_' + self.fit_method + '_' + self.fit_file_num + '.yaml')
+        # self.drag_file = os.path.join(config_dir, NM_file + '.npz')
+        self.drag_file = os.path.join(config_dir, 'NM_coeff_' + '4' + '.npz')
+        self.NM_fun_val_file = os.path.join(config_dir, NM_file + '_fun_val' + '.npz')
+        self.Drag_coeff_all_for_now_file = os.path.join(config_dir, NM_file + '_all_for_now' + '.npz')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
         self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
         if self.fit_method == "LFS":
@@ -91,6 +96,7 @@ class QuadMPC:
             self.Drag_A  = Drag['A']
             self.Drag_B  = Drag['B']
             self.fit_size = len(self.Drag_D)
+            self.fun_val = np.array([])
 
         self.experiment_times = self.fit_size
         self.file_num = self.fit_size
@@ -141,14 +147,10 @@ class QuadMPC:
         arm.data = True
         self.arm_pub.publish(arm)
 
-        # while not self.have_ap_fb:
-        #     rospy.sleep(0.5)
         if(self.ap_state == AutopilotFeedback().OFF):
             self.start_autopilot_pub.publish(std_msgs.msg.Empty())
             i = 0
             while (self.ap_state != AutopilotFeedback().HOVER):
-                # print(6 - i - 1)
-                # i += 1
                 rospy.sleep(1.0)
         print("HOVER STATE")
         
@@ -214,8 +216,11 @@ class QuadMPC:
                             self.Drag_A  = Drag_A
                             self.Drag_B  = Drag_B
 
-                            if (pose_error_rmse_last[-1] - pose_error_rmse_last[0]) < 0.01 or pose_error_rmse_last[0] < 0.05:
-                                drag_coefficient = np.concatenate((np.sum(self.Drag_D[0], axis=1), self.Drag_kh[0], np.sum(self.Drag_D[0], axis=1)[:2], np.sum(self.Drag_B[0], axis=1))).tolist()
+                            # np.savez(self.NM_fun_val_file,fun_val=pose_error_rmse_last)
+                            # np.savez(self.Drag_coeff_all_for_now_file,A=self.Drag_A,B=self.Drag_B,D=self.Drag_D,kh=self.Drag_kh)
+
+                            if (pose_error_rmse_last[-1] - pose_error_rmse_last[0]) < 0.02 or pose_error_rmse_last[0] < 0.05:
+                                drag_coefficient = np.concatenate((np.sum(self.Drag_D[0], axis=1), self.Drag_kh[0], np.sum(self.Drag_A[0], axis=1)[:2], np.sum(self.Drag_B[0], axis=1))).tolist()
                                 print("Nelder Mead Result: ", drag_coefficient)
                                 self.saveParam(drag_coefficient)
                                 return
@@ -229,16 +234,8 @@ class QuadMPC:
                             Drag_kh_reflect = Drag_kh_mean + alpha * (Drag_kh_mean - self.Drag_kh[-1])
                             Drag_A_reflect  = Drag_A_mean + alpha * (Drag_A_mean - self.Drag_A[-1])
                             Drag_B_reflect  = Drag_B_mean + alpha * (Drag_B_mean - self.Drag_B[-1])
-                            # print(Drag_D_reflect)
-                            # print(Drag_kh_reflect)
-                            # print(Drag_A_reflect)
-                            # print(Drag_B_reflect)
 
-                            # calculate reflection error
                             self.cal_type = "reflection"
-                            
-                            # model = QuadrotorModel(Drag_D=Drag_D_reflect, Drag_kh=Drag_kh_reflect, Drag_A=Drag_A_reflect, Drag_B=Drag_B_reflect, need_collision_free=False, useTwoPolyhedron=False)
-                            # qo = QuadrotorOptimizer(Tf=self.t_horizon, N=self.N, quadrotorModel=model, cost_type=self.cost_type, num=0)
                             self.Drag_D_tobe_created  = np.zeros((1, 3, 3))
                             self.Drag_kh_tobe_created = np.zeros((1, 1))
                             self.Drag_A_tobe_created  = np.zeros((1, 3, 3))
@@ -261,29 +258,23 @@ class QuadMPC:
                                 self.pose_error_rmse[-1] = reflection_rmse
                                 self.finish_tracking = True
                                 self.cal_type = "all"
-                                continue
+                                # continue
                             elif reflection_rmse < pose_error_rmse_last[0]:
                                 Drag_D_expansion  = Drag_D_mean + gamma * (Drag_D_reflect - Drag_D_mean)
                                 Drag_kh_expansion = Drag_kh_mean + gamma * (Drag_kh_reflect - Drag_kh_mean)
                                 Drag_A_expansion  = Drag_A_mean + gamma * (Drag_A_reflect - Drag_A_mean)
                                 Drag_B_expansion  = Drag_B_mean + gamma * (Drag_B_reflect - Drag_B_mean)
-                                self.cal_type = "expansion"
 
+                                self.cal_type = "expansion"
                                 self.Drag_D_tobe_created  = np.zeros((1, 3, 3))
                                 self.Drag_kh_tobe_created = np.zeros((1, 1))
                                 self.Drag_A_tobe_created  = np.zeros((1, 3, 3))
                                 self.Drag_B_tobe_created  = np.zeros((1, 3, 3))
-
                                 self.Drag_D_tobe_created[0]  = Drag_D_expansion
                                 self.Drag_kh_tobe_created[0] = Drag_kh_expansion
                                 self.Drag_A_tobe_created[0]  = Drag_A_expansion
                                 self.Drag_B_tobe_created[0]  = Drag_B_expansion
-
                                 self.need_create_optimizer = True
-                                # self.quadrotorOptimizer = []
-                                # self.quadrotorOptimizer.append(QuadrotorOptimizer(self.t_horizon, self.N, QuadrotorModel(Drag_D=Drag_D_expansion, Drag_kh=Drag_kh_expansion, Drag_A=Drag_A_expansion, Drag_B=Drag_B_expansion), cost_type=self.cost_type, num=self.file_num))
-                                # self.file_num += 1
-                                # self.experiment_times = 1
                             elif reflection_rmse >= pose_error_rmse_last[-2]:
                                 Drag_D_contraction  = Drag_D_mean + rho * (self.Drag_D[-1] - Drag_D_mean)
                                 Drag_kh_contraction = Drag_kh_mean + rho * (self.Drag_kh[-1] - Drag_kh_mean)
@@ -311,7 +302,7 @@ class QuadMPC:
                             else:
                                 self.finish_tracking = True
                                 self.cal_type = "shrink"
-                                continue
+                                # continue
                         elif self.cal_type == "expansion":
                             expansion_rmse = self.pose_error_rmse[0]
                             if expansion_rmse < reflection_rmse:
@@ -330,7 +321,7 @@ class QuadMPC:
                                 self.pose_error_rmse[-1] = reflection_rmse
                             self.finish_tracking = True
                             self.cal_type = "all"
-                            continue
+                            # continue
                         elif self.cal_type == "contraction":
                             contraction_rmse = self.pose_error_rmse[0]
                             if contraction_rmse < pose_error_rmse_last[-1]:
@@ -345,7 +336,7 @@ class QuadMPC:
                             else:
                                 self.finish_tracking = True
                                 self.cal_type = "shrink"
-                                continue
+                                # continue
                         elif self.cal_type == "shrink":
                             self.Drag_D_tobe_created  = np.zeros((self.fit_size, 3, 3))
                             self.Drag_kh_tobe_created = np.zeros((self.fit_size, 1))
@@ -372,11 +363,18 @@ class QuadMPC:
                             self.need_create_optimizer = True
                             self.cal_type = "all"
 
-                        np.savez('../config/Drag_coeff_best_for_now.npz',A=self.Drag_A[0],B=self.Drag_B[0],D=self.Drag_D[0],kh=self.Drag_kh[0])
+                        if len(self.fun_val) == 0:
+                            self.fun_val = np.zeros((1, self.fit_size))
+                            self.fun_val[0] = pose_error_rmse_last[np.newaxis,:]
+                        else:
+                            self.fun_val = np.concatenate((self.fun_val, pose_error_rmse_last[np.newaxis,:]), axis=0)
+                        np.savez(self.NM_fun_val_file,fun_val=self.fun_val)
+                        np.savez(self.Drag_coeff_all_for_now_file,A=self.Drag_A,B=self.Drag_B,D=self.Drag_D,kh=self.Drag_kh)
                         print(self.Drag_A[0])
                         print(self.Drag_B[0])
                         print(self.Drag_D[0])
                         print(self.Drag_kh[0])
+                        print(pose_error_rmse_last)
 
             if self.need_create_optimizer:
                 self.need_create_optimizer = False
@@ -532,7 +530,10 @@ class QuadMPC:
 
         if not self.reach_start_point:
             # get to initial point
-            yaw = math.pi
+            # yaw = math.pi / 2 / math.pi * 180
+            yaw = math.pi / 2
+            # print(yaw / 2)
+            # print(math.cos(yaw / 2))
             if not self.have_reach_start_point_cmd:
                 print("go to start point")
                 cmd = PoseStamped()
@@ -542,7 +543,7 @@ class QuadMPC:
                 self.control_pose_pub.publish(cmd)
                 rospy.sleep(1.0)
                 # if self.ap_state != AutopilotFeedback().HOVER:
-                if self.ap_state == AutopilotFeedback().TRAJECTORY_CONTROL:
+                if self.ap_state == AutopilotFeedback().TRAJECTORY_CONTROL or (np.linalg.norm(np.array(self.p) - self.start_point) < 0.1):
                     self.have_reach_start_point_cmd = True
                     # rospy.sleep(5.0)
                 else:
@@ -587,7 +588,7 @@ class QuadMPC:
                         self.reach_times = 0
             elif rospy.Time.now().to_sec() - self.begin_time >= self.experiment_time:
                 self.finish_tracking = True
-            elif self.pose_error_max[self.experiment_times_current] > 3:
+            elif self.pose_error_max[self.experiment_times_current] > 2.1:
                 self.finish_tracking = True
         else:
             self.trigger = False
@@ -1099,17 +1100,34 @@ class QuadMPC:
         return np.concatenate((np.linalg.inv(np.dot(A_drag.T, A_drag)).dot(A_drag.T).dot(b_drag), np.linalg.inv(np.dot(C_drag.T, C_drag)).dot(C_drag.T).dot(d_drag)))
 
     def saveParam(self, drag_coefficient):
-        with open(self.yaml_file) as file:
-            config = yaml.load(file)
-        config.update({'D_dx': drag_coefficient[0]})
-        config.update({'D_dy': drag_coefficient[1]})
-        config.update({'D_dz': drag_coefficient[2]})
-        config.update({'kh': drag_coefficient[3]})
-        config.update({'D_ax': drag_coefficient[4]})
-        config.update({'D_ay': drag_coefficient[5]})
-        config.update({'D_bx': drag_coefficient[6]})
-        config.update({'D_by': drag_coefficient[7]})
-        config.update({'D_bz': drag_coefficient[8]})
+        if os.path.exists(self.yaml_file) == False:
+            # open(self.yaml_file, 'w')
+            file = open(self.yaml_file, 'w', encoding='utf-8')
+            config = {
+                'D_dx': drag_coefficient[0],
+                'D_dy': drag_coefficient[1],
+                'D_dz': drag_coefficient[2],
+                'kh': drag_coefficient[3],
+                'D_ax': drag_coefficient[4],
+                'D_ay': drag_coefficient[5],
+                'D_bx': drag_coefficient[6],
+                'D_by': drag_coefficient[7],
+                'D_bz': drag_coefficient[8],
+                }
+            yaml.dump(config, file)
+            file.close()
+        else:
+            with open(self.yaml_file) as file:
+                config = yaml.load(file)
+            config.update({'D_dx': drag_coefficient[0]})
+            config.update({'D_dy': drag_coefficient[1]})
+            config.update({'D_dz': drag_coefficient[2]})
+            config.update({'kh': drag_coefficient[3]})
+            config.update({'D_ax': drag_coefficient[4]})
+            config.update({'D_ay': drag_coefficient[5]})
+            config.update({'D_bx': drag_coefficient[6]})
+            config.update({'D_by': drag_coefficient[7]})
+            config.update({'D_bz': drag_coefficient[8]})
         with open(self.yaml_file, 'w') as file:
             file.write(yaml.dump(config, default_flow_style=False))
 
