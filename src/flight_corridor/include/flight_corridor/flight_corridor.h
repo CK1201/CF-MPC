@@ -37,7 +37,7 @@ namespace flight_corridor
         bool HaveOdom_, HaveMap_, UseJPS_, UsePrior_, HavePoly_, HaveMapVis_;
         /* parameters */
         int pt_num_ = 0;
-        double last_poly_time_;
+        double last_poly_time_, offset_;
         Eigen::Vector3d Goal_;
         vec_Vec3f Path_;
         sensor_msgs::PointCloud GridMapVis_;

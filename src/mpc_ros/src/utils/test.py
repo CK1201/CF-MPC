@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 # a = np.arange(12).reshape((4,3))
 # print(a)
 # print(np.gradient(a, axis=0))
@@ -18,13 +19,12 @@ import numpy as np
 # print(dp)
 # print(dp * a)
 
-# 4：5m/s
-# 5：10m/s
-# 6：15m/s
-# 7：17m/s
+# 4 5m/s
+# 5 10m/s
+# 6 15m/s
 
-drag_file = '../../config/NM_coeff_5.npz'
-fit_size = 10
+drag_file = '../../config/NM_coeff_1.npz'
+fit_size = 5
 A = np.zeros((fit_size,3,3))
 B = np.zeros((fit_size,3,3))
 D = np.zeros((fit_size,3,3))
@@ -80,3 +80,11 @@ np.savez(drag_file,A=A,B=B,D=D,kh=kh)
 
 
 # print(np.mean(np.random.rand(10,3,3), axis=0))
+
+
+# Data = np.load('../../config/NM_coeff_6_fun_val.npz')
+# fun_val = Data['fun_val']
+# print(fun_val[:,0])
+# fig=plt.figure()
+# plt.plot(fun_val[:,0])
+# plt.show()

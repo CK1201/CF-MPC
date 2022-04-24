@@ -9,8 +9,8 @@ class QuadrotorOptimizer:
         self.ocp = AcadosOcp()
         # acados_solver = AcadosOcpSolver(ocp)
         acados_source_path = os.environ['ACADOS_SOURCE_DIR']
-        self.ocp.acados_include_path = acados_source_path + '/include'
-        self.ocp.acados_lib_path = acados_source_path + '/lib'
+        self.ocp.acados_include_path = f'{acados_source_path}/include'
+        self.ocp.acados_lib_path = f'{acados_source_path}/lib'
 
 
         acModel = AcadosModel()
@@ -87,6 +87,7 @@ class QuadrotorOptimizer:
             # Q[2,2] = 500 # z
             Q[8,8] = 200 # yaw
             R = np.eye(nu) * 6 / model.RotorSpeed_max
+            Q = Q * 1
 
             diff_q = diff_between_q_q(acModel.x[6:10], acModel.p[6:10])[1:]
             diff_state = ca.vertcat(acModel.x[:6] - acModel.p[:6], diff_q, acModel.x[10:13] - acModel.p[10:13])
@@ -98,7 +99,8 @@ class QuadrotorOptimizer:
             self.ocp.model.cost_expr_ext_cost_e = diff_state.T @ Q @ diff_state
 
             if self.quadrotorModel.need_collision_free:
-                SafetyWeight = Q[2,2] * 10
+                # SafetyWeight = Q[2,2] * 10
+                SafetyWeight = 200 * 5
                 SafetyCost = 0
                 if self.quadrotorModel.useTwoPolyhedron:
                     for i in range(model.boxVertex.size()[1]):
@@ -183,15 +185,15 @@ class QuadrotorOptimizer:
         # self.ocp.solver_options.tol = 1e-4 
         # self.ocp.solver_options.nlp_solver_tol_comp = 1e-1 
         self.ocp.solver_options.qp_solver_warm_start = 1
-        
+
 
         # create solver
         json_file = os.path.join('./' + model.name + '_' + str(num) + '_acados_ocp.json')
         if os.path.exists(json_file):
-            print("remove " + json_file)
+            print(f"remove {json_file}")
             os.remove(json_file)
         self.acados_solver = AcadosOcpSolver(self.ocp, json_file = json_file)
-        print("create " + json_file)
+        print(f"create {json_file}")
         print()
         # self.acados_integrator = AcadosSimSolver(self.ocp, json_file = json_file)
 

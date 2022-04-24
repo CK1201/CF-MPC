@@ -23,7 +23,7 @@ class QuadrotorModel:
         self.body_height = float(attrib['body_height'])
         self.arm_length = float(attrib['arm_length'])
         self.radius_rotor = float(attrib['radius_rotor'])
-        
+
         self.kT = float(attrib["motor_constant"])
         self.kM = float(attrib['moment_constant'])
         self.D = Drag_D
@@ -67,7 +67,7 @@ class QuadrotorModel:
 
         RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
 
-        quad_length = self.arm_length + self.radius_rotor
+        quad_length = self.arm_length + self.radius_rotor + 0.00
         height = self.body_height / 2
         self.model.boxVertexNp = np.array([[quad_length, 0, -height],
                             [quad_length, 0, height],
@@ -91,21 +91,18 @@ class QuadrotorModel:
         # u
         RotorSpeed = ca.SX.sym("RotorSpeed", 4, 1)
         temp_input = self.G @ (RotorSpeed ** 2)
-        
+
         # algebraic variables
         # z = ca.vertcat([])
 
         # parameters
-        if self.need_collision_free:
-            self.model.MaxNumOfPolyhedrons = 10
-        else:
-            self.model.MaxNumOfPolyhedrons = 0
+        self.model.MaxNumOfPolyhedrons = 10 if self.need_collision_free else 0
         if useTwoPolyhedron:
             param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4 * 2, 1)
         else:
             param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
 
-        
+
 
         BodyRateHat = crossmat(BodyRate)
         # xb = RotationMat[:, 0]
@@ -121,7 +118,7 @@ class QuadrotorModel:
             1 / 2 * skew_symmetric(BodyRate) @ Orientation,
             ca.inv(self.Inertia) @ (-BodyRateHat @ self.Inertia @ BodyRate + temp_input[1:] + tao_d)
         )
-        
+
         # con_h
         con_h = None
 

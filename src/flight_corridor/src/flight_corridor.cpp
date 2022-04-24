@@ -18,6 +18,7 @@ namespace flight_corridor
         nh.param("flight_corridor/goal_z", Goal_[2], 0.0);
         nh.param("flight_corridor/use_jps", UseJPS_, true);
         nh.param("flight_corridor/use_prior", UsePrior_, true);
+        nh.param("flight_corridor/offset", offset_, 0.0);
         
 
         GridMap_.reset(new GridMap);
@@ -28,8 +29,8 @@ namespace flight_corridor
         ExecTimer_ = nh.createTimer(ros::Duration(0.05), &FLIGHTCORRIDOR::execSFCCallback, this);
 
         OdomSub_ = nh.subscribe<nav_msgs::Odometry>("/hummingbird/ground_truth/odometry", 1, &FLIGHTCORRIDOR::QuadOdomCallback, this);
-        // OctoMapCenterSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/octomap_point_cloud_centers", 1, &FLIGHTCORRIDOR::OctoMapCenterCallback, this);
-        GridMapInfSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/grid_map/occupancy_inflate", 1, &FLIGHTCORRIDOR::GridMapInfCallback, this);
+        OctoMapCenterSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/octomap_point_cloud_centers", 1, &FLIGHTCORRIDOR::OctoMapCenterCallback, this);
+        // GridMapInfSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/grid_map/occupancy_inflate", 1, &FLIGHTCORRIDOR::GridMapInfCallback, this);
         GridMapVisSub_ = nh.subscribe<sensor_msgs::PointCloud2>("/grid_map/vis", 1, &FLIGHTCORRIDOR::GridMapVisCallback, this);
 
         PointCloudPub_ = nh.advertise<sensor_msgs::PointCloud>("/obstacle", 1);
@@ -95,6 +96,7 @@ namespace flight_corridor
                     double b = Polyhedrons_[i].hyperplanes()[j].p_.dot(n);
                     if (n.dot(pt_inside) > b)
                         Polyhedrons_[i].hyperplanes()[j].n_ = -Polyhedrons_[i].hyperplanes()[j].n_;
+                    Polyhedrons_[i].hyperplanes()[j].p_ = Polyhedrons_[i].hyperplanes()[j].p_ - Polyhedrons_[i].hyperplanes()[j].n_ / Polyhedrons_[i].hyperplanes()[j].n_.norm() * offset_;
                 }
             }
             // cout << "redirect: " << ros::Time::now().toSec() - time << endl;
@@ -120,13 +122,13 @@ namespace flight_corridor
         QuadOdom_ = *msg;
     }
 
-    // void FLIGHTCORRIDOR::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg){
-    //     HaveMap_ = true;
-    //     OctoMapCenter_ = *msg;
-    //     sensor_msgs::PointCloud ObstaclePointCloud;
-    //     sensor_msgs::convertPointCloud2ToPointCloud(OctoMapCenter_, ObstaclePointCloud);
-    //     decomp_util.set_obs(DecompROS::cloud_to_vec(ObstaclePointCloud));
-    // }
+    void FLIGHTCORRIDOR::OctoMapCenterCallback(const sensor_msgs::PointCloud2::ConstPtr &msg){
+        HaveMap_ = true;
+        // OctoMapCenter_ = ;
+        sensor_msgs::PointCloud ObstaclePointCloud;
+        sensor_msgs::convertPointCloud2ToPointCloud(*msg, ObstaclePointCloud);
+        decomp_util.set_obs(DecompROS::cloud_to_vec(ObstaclePointCloud));
+    }
 
     void FLIGHTCORRIDOR::GridMapInfCallback(const sensor_msgs::PointCloud2::ConstPtr &msg){
         HaveMap_ = true;
@@ -135,6 +137,12 @@ namespace flight_corridor
         decomp_util.set_obs(DecompROS::cloud_to_vec(ObstaclePointCloud));
     }
 
+/**
+ * This function is a callback function that is called when a new message is received on the topic
+ * "/grid_map_vis". The message is converted to a point cloud and stored in the variable GridMapVis_
+ * 
+ * @param msg The message that contains the point cloud data.
+ */
     void FLIGHTCORRIDOR::GridMapVisCallback(const sensor_msgs::PointCloud2::ConstPtr &msg){
         HaveMapVis_ = true;
         sensor_msgs::convertPointCloud2ToPointCloud(*msg, GridMapVis_);

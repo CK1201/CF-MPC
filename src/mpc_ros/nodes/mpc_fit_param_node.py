@@ -33,12 +33,20 @@ class QuadMPC:
         self.fit_method = rospy.get_param('~fit_method', default='LFS')
         self.fit_file_num = str(rospy.get_param('~fit_file_num', default='1'))
         self.cost_type = rospy.get_param('~cost_type', default='EXTERNAL')
-        if (self.expriment == 'circle' or self.expriment == 'circle_speedup' or self.expriment == 'circle_speedup_stay') and self.start_point[0] < 1:
-            self.start_point[0] = 10
-            self.stable_time = self.max_vel / (2 * self.w_rate * self.start_point[0])
+
+        if self.start_point[0] < 1:
+            r = 10
+        else:
+            r = self.start_point[0]
+        if self.expriment == 'circle_speedup_stay':
+            self.stable_time = self.max_vel / (2 * self.w_rate * r) + 5
+            self.experiment_time = self.experiment_time + self.stable_time
+        elif self.expriment == 'circle_speedup':
+            self.stable_time = 0
+            self.experiment_time = self.max_vel / (2 * self.w_rate * r)
         else:
             self.stable_time = rospy.get_param('~stable_time', default='5')
-        self.experiment_time = self.experiment_time + self.stable_time
+        
 
         self.t_horizon = t_horizon # prediction horizon
         self.N = N # number of discretization steps'
@@ -47,11 +55,14 @@ class QuadMPC:
         self.experiment_times_current = 0
         self.a_data = None
 
+        
+
         self.have_odom = False
+        self.have_motor_speed = False
         self.have_ap_fb = False
         self.have_reach_start_point_cmd = False
         self.have_polyhedron = False
-        self.trigger = False
+        self.trigger = True
         self.reach_start_point = False
         self.start_record = False
         self.finish_tracking = False
@@ -66,7 +77,7 @@ class QuadMPC:
         self.result_file = os.path.join(result_dir, self.expriment + '_without_drag.txt')
         self.yaml_file = os.path.join(config_dir, quad_name + '_' + self.fit_method + '_' + self.fit_file_num + '.yaml')
         # self.drag_file = os.path.join(config_dir, NM_file + '.npz')
-        self.drag_file = os.path.join(config_dir, 'NM_coeff_' + '4' + '.npz')
+        self.drag_file = os.path.join(config_dir, 'NM_coeff_' + '1' + '.npz')
         self.NM_fun_val_file = os.path.join(config_dir, NM_file + '_fun_val' + '.npz')
         self.Drag_coeff_all_for_now_file = os.path.join(config_dir, NM_file + '_all_for_now' + '.npz')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
@@ -100,6 +111,16 @@ class QuadMPC:
 
         self.experiment_times = self.fit_size
         self.file_num = self.fit_size
+
+        self.pose_error = np.zeros(self.experiment_times)
+        self.pose_error_square = np.zeros(self.experiment_times)
+        self.pose_error_max = np.zeros(self.experiment_times)
+        self.pose_error_mean = np.zeros(self.experiment_times)
+        self.pose_error_rmse = np.zeros(self.experiment_times)
+        self.max_v_w = np.zeros(self.experiment_times)
+        self.max_a_w = np.zeros(self.experiment_times)
+        self.max_motor_speed = np.zeros(self.experiment_times)
+        self.reach_times = 0
         
         # load model
         self.quadrotorOptimizer = []
@@ -110,6 +131,8 @@ class QuadMPC:
         self.quad_vis_pub = rospy.Publisher('/' + quad_name + '/quad_odom', Marker, queue_size=1, tcp_nodelay=True)
         self.quad_box_vis_pub = rospy.Publisher('/' + quad_name + '/quad_box', Marker, queue_size=1, tcp_nodelay=True)
         self.odom_sub = rospy.Subscriber('/' + quad_name + '/ground_truth/odometry', Odometry, self.odom_callback)
+        self.imu_sub = rospy.Subscriber('/' + quad_name + '/ground_truth/imu', Imu, self.imu_callback)
+        self.motor_speed_sub = rospy.Subscriber('/' + quad_name + '/motor_speed', Actuators, self.motor_speed_callback)
         self.trigger_sub = rospy.Subscriber('/' + quad_name + '/trigger', std_msgs.msg.Empty, self.trigger_callback)
         self.ap_fb_sub = rospy.Subscriber('/' + quad_name + '/autopilot/feedback', AutopilotFeedback, self.ap_fb_callback)
         
@@ -168,6 +191,7 @@ class QuadMPC:
                     self.pose_error_mean[self.experiment_times_current] = 0
                     self.pose_error_rmse[self.experiment_times_current] = 0
                     self.max_v_w[self.experiment_times_current] = 0
+                    self.max_a_w[self.experiment_times_current] = 0
                     self.max_motor_speed[self.experiment_times_current] = 0
                     self.experiment_times_current -= 1
                 self.experiment_times_current += 1
@@ -181,11 +205,10 @@ class QuadMPC:
                     print("mean error: ", self.pose_error_mean)
                     print("rmse error: ", self.pose_error_rmse)
                     print("max  v_w  : ", self.max_v_w)
+                    print("max  a_w  : ", self.max_a_w)
                     # print("max  motor: ", self.max_motor_speed)
                     self.experiment_times_current -= 1
                     if self.fit_method == "LFS":
-                        # if self.need_fit_param and self.start_record:
-                        #     if (rospy.Time.now().to_sec() - self.start_record_time) >= self.record_time:
                         drag_coefficient = np.squeeze(self.fitParam(self.x_data, self.a_data, self.motor_data, self.t_data)).tolist()
                         print("LFS Result: ", drag_coefficient)
                         self.saveParam(drag_coefficient)
@@ -396,6 +419,7 @@ class QuadMPC:
                 self.pose_error_mean = np.zeros(self.experiment_times)
                 self.pose_error_rmse = np.zeros(self.experiment_times)
                 self.max_v_w = np.zeros(self.experiment_times)
+                self.max_a_w = np.zeros(self.experiment_times)
                 self.max_motor_speed = np.zeros(self.experiment_times)
                 self.reach_times = 0
                 self.pose_error_num = 0
@@ -482,6 +506,15 @@ class QuadMPC:
         # print(cost)
         self.quad_box_vis_pub.publish(quad_box)
         return
+
+    def imu_callback(self, msg):
+        if not(self.have_odom):
+            return
+        self.a_w = v_dot_q(np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z]), np.array(self.q)).tolist()
+    
+    def motor_speed_callback(self, msg):
+        self.have_motor_speed = True
+        self.motor_speed = np.array(msg.angular_velocities)
     
     def trigger_callback(self, msg):
         self.trigger = True
@@ -493,6 +526,7 @@ class QuadMPC:
         self.pose_error_mean = np.zeros(self.experiment_times)
         self.pose_error_rmse = np.zeros(self.experiment_times)
         self.max_v_w = np.zeros(self.experiment_times)
+        self.max_a_w = np.zeros(self.experiment_times)
         self.max_motor_speed = np.zeros(self.experiment_times)
         self.reach_times = 0
         self.pose_error_num = 0
@@ -557,7 +591,6 @@ class QuadMPC:
                     self.begin_time = rospy.Time.now().to_sec()
                     if self.fit_method == 'LFS':
                         self.start_record = True
-                    # self.start_record_time = rospy.Time.now().to_sec()
                     self.have_reach_start_point_cmd = False
                     print("arrive start point")
             else:
@@ -575,7 +608,7 @@ class QuadMPC:
             error_vel  = np.linalg.norm(np.array(self.v_w) - v[0])
             error_q    = np.linalg.norm(diff_between_q_q(np.array(self.q), q[0])[1:])
             error_br   = np.linalg.norm(np.array(self.w) - br[0])
-            if rospy.Time.now().to_sec() - self.begin_time > self.stable_time + 5:
+            if rospy.Time.now().to_sec() - self.begin_time > self.stable_time:
                 self.pose_error[self.experiment_times_current] += error_pose
                 self.pose_error_square[self.experiment_times_current] += error_pose ** 2
                 self.pose_error_num += 1
@@ -597,10 +630,9 @@ class QuadMPC:
             self.pose_error_rmse[self.experiment_times_current] = math.sqrt(self.pose_error_square[self.experiment_times_current] / self.pose_error_num)
             self.pose_error_num = 0
             print("max error : ", self.pose_error_max[self.experiment_times_current])
-            # print("mean error: ", self.pose_error_mean[self.experiment_times_current])
-            # print('\033[7;32;40mRmse      : \033[0m', self.pose_error_rmse[self.experiment_times_current])
+            print("max vel :   ", self.max_v_w[self.experiment_times_current])
+            print("max acc :   ", self.max_a_w[self.experiment_times_current])
             print("Rmse      : ", self.pose_error_rmse[self.experiment_times_current])
-            # print("max v_w   : ", self.max_v_w[self.experiment_times_current])
             # print("max motor :  {:.2f}, {:.2f}%".format(self.max_motor_speed[self.experiment_times_current], self.max_motor_speed[self.experiment_times_current] / self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.model.RotorSpeed_max * 100))
             return
         
@@ -610,8 +642,8 @@ class QuadMPC:
     def getReference(self, experiment, start_point, hover_point, time_now, t_horizon, N_node, velocity, w_rate, model, plot):
         if start_point is None:
             start_point = np.array([5, 0, 5])
-        if abs(self.start_point[0]) < 0.1:
-            r = 5
+        if abs(self.start_point[0]) < 1:
+            r = 10
         else:
             r = self.start_point[0]
         p = np.zeros((N_node + 1, 3))
@@ -992,6 +1024,7 @@ class QuadMPC:
         v_b = v_dot_q(v[0], quaternion_inverse(np.array(self.q)))
         vb_abs = np.linalg.norm(v_dot_q(self.v_w, quaternion_inverse(np.array(self.q))))
         vw_abs = np.linalg.norm(self.v_w)
+        aw_abs = np.linalg.norm(self.a_w)
         desire = Odometry()
         desire.pose.pose.position.x, desire.pose.pose.position.y, desire.pose.pose.position.z = p[0, 0], p[0, 1], p[0, 2]
         desire.pose.pose.orientation.w, desire.pose.pose.orientation.x, desire.pose.pose.orientation.y, desire.pose.pose.orientation.z = q[0, 0], q[0, 1], q[0, 2], q[0, 3]
@@ -999,13 +1032,10 @@ class QuadMPC:
         desire.twist.twist.angular.x, desire.twist.twist.angular.x, desire.twist.twist.angular.x = br[0, 0], br[0, 1], br[0, 2]
         self.desire_pub.publish(desire)
 
-        try:
-            max_motor_speed_now = np.max(self.motor_data[-1])
-        except AttributeError:
-            max_motor_speed_now = 0
-            
+        max_motor_speed_now = np.max(self.motor_speed) if self.have_motor_speed else 0 
         self.max_motor_speed[self.experiment_times_current] = max(self.max_motor_speed[self.experiment_times_current], max_motor_speed_now)
         self.max_v_w[self.experiment_times_current] = max(self.max_v_w[self.experiment_times_current], vw_abs)
+        self.max_a_w[self.experiment_times_current] = max(self.max_a_w[self.experiment_times_current], aw_abs)
 
         desire_motor = Actuators()
         desire_motor.angular_velocities = u[0]
@@ -1020,11 +1050,11 @@ class QuadMPC:
             print('rest of time: ', self.experiment_time - (rospy.Time.now().to_sec() - self.begin_time))
             print('runtime: ', self.lastMPCTime - time)
             # print("pose:        [{:.2f}, {:.2f}, {:.2f}]".format(self.p[0], self.p[1], self.p[2]))
-            print("vel:         [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(self.v_w[0], self.v_w[1], self.v_w[2], vw_abs))
             print("pose error:  [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(p[0, 0] - self.p[0], p[0, 1] - self.p[1], p[0, 2] - self.p[2], error_pose))
-            # print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.model.RotorSpeed_max * 100))
             print("pose rmse:   [{:.3f}]".format(math.sqrt(self.pose_error_square[self.experiment_times_current] / self.pose_error_num)))
-            
+            print("vel:         [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(self.v_w[0], self.v_w[1], self.v_w[2], vw_abs))
+            print("acc:         [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(self.a_w[0], self.a_w[1], self.a_w[2], aw_abs))
+            print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.model.RotorSpeed_max * 100))
             print()
 
     def visTraj(self):

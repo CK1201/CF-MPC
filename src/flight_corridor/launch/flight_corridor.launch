@@ -1,13 +1,14 @@
 <launch>
     <arg name="quad_name" default="hummingbird"/>
-    <arg name="flight_corridor/bounding_box_x" default="1"/>
-    <arg name="flight_corridor/bounding_box_y" default="1"/>
-    <arg name="flight_corridor/bounding_box_z" default="0.5"/>
+    <arg name="flight_corridor/bounding_box_x" default="1.2"/>
+    <arg name="flight_corridor/bounding_box_y" default="1.2"/>
+    <arg name="flight_corridor/bounding_box_z" default="0.7"/>
     <arg name="flight_corridor/goal_x" default="10.1"/>
     <arg name="flight_corridor/goal_y" default="0.5"/>
     <arg name="flight_corridor/goal_z" default="0.5"/>
     <arg name="flight_corridor/use_jps" default="true"/>
     <arg name="flight_corridor/use_prior" default="true"/>
+    <arg name="flight_corridor/offset" default="0.00"/>
 
     <arg name="grid_map/resolution" default="0.1"/>
     <arg name="grid_map/map_size_x" default="32.0"/>
@@ -55,7 +56,7 @@
     <arg name="grid_map/odom_depth_timeout" default="0.1"/>
 
     <include file="$(find mpc_ros)/launch/octomap.launch">
-        <arg name="cotomap/resolution" value="$(arg grid_map/resolution) * 0.5"/>
+        <arg name="cotomap/resolution" value="0.01"/>
         <arg name="cotomap/pointcloud_min_z" value="$(arg grid_map/ground_height)"/>
         <!-- <arg name="cotomap/pointcloud_max_z" value="$(arg grid_map/ground_height) + $(arg grid_map/map_size_z)"/> -->
         <arg name="cotomap/pointcloud_max_z" value="$(arg grid_map/map_size_z)"/>
@@ -70,6 +71,7 @@
         <param name="flight_corridor/goal_z" value="$(arg flight_corridor/goal_z)"/>
         <param name="flight_corridor/use_jps" value="$(arg flight_corridor/use_jps)"/>
         <param name="flight_corridor/use_prior" value="$(arg flight_corridor/use_prior)"/>
+        <param name="flight_corridor/offset" value="$(arg flight_corridor/offset)"/>
 
         <param name="grid_map/resolution" value="$(arg grid_map/resolution)"/>
         <param name="grid_map/map_size_x" value="$(arg grid_map/map_size_x)"/>
