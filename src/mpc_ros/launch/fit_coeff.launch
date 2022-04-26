@@ -1,16 +1,11 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <arg name="fit_method" default="NM"/>       <!-- LFS, NM -->
-    <arg name="fit_file_num" default="3"/>
-    <arg name="cost_type" default="EXTERNAL"/>   <!-- EXTERNAL, LINEAR_LS -->
-    <arg name="stable_time" default="5"/>
-    <arg name="heading" default="true"/>
+    <arg name="fit_method" default="LFS"/>       <!-- LFS, NM -->
+    <arg name="fit_file_num" default="5"/>
+    <arg name="max_vel" default="12"/>   <!-- change this -->
     
     <arg name="expriment" default="circle_speedup_stay"/>
-    <arg name="experiment_time" default="10"/>
-    <arg name="max_vel" default="15"/>   <!-- chang this -->
-    <arg name="w_rate" default="0.1"/>
-    <arg name="start_x" default="10"/>
+    <arg name="start_x" default="5"/>
     <arg name="start_y" default="0"/>
     <arg name="start_z" default="10"/>
 
@@ -28,6 +23,12 @@
     <arg name="hover_x" default="0"/>
     <arg name="hover_y" default="0"/>
     <arg name="hover_z" default="5"/>
+
+    <arg name="w_rate" default="0.05"/>
+    <arg name="experiment_time" default="10"/>
+    <arg name="cost_type" default="EXTERNAL"/>   <!-- EXTERNAL, LINEAR_LS -->
+    <arg name="stable_time" default="5"/>
+    <arg name="heading" default="true"/>
 
     <!-- circle_speedup_stay
     circle_speedup

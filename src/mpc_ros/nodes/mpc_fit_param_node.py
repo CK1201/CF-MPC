@@ -511,6 +511,7 @@ class QuadMPC:
         if not(self.have_odom):
             return
         self.a_w = v_dot_q(np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z]), np.array(self.q)).tolist()
+        self.a_w[2] -= 9.81
     
     def motor_speed_callback(self, msg):
         self.have_motor_speed = True
@@ -542,7 +543,7 @@ class QuadMPC:
         q = [odom_msg.pose.pose.orientation.w, odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z]
         v_w = v_dot_q(np.array([odom_msg.twist.twist.linear.x, odom_msg.twist.twist.linear.y, odom_msg.twist.twist.linear.z]), np.array(self.q)).tolist()
         w = [odom_msg.twist.twist.angular.x, odom_msg.twist.twist.angular.y, odom_msg.twist.twist.angular.z]
-        a_w = v_dot_q(np.array([imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z]), np.array(self.q)).tolist()
+        a_w = v_dot_q(np.array([imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z]), np.array(self.q)).tolist() # with gravity
 
         if len(self.x_data) == 0:
             self.x_data = np.zeros((1, 13))
@@ -608,6 +609,10 @@ class QuadMPC:
             error_vel  = np.linalg.norm(np.array(self.v_w) - v[0])
             error_q    = np.linalg.norm(diff_between_q_q(np.array(self.q), q[0])[1:])
             error_br   = np.linalg.norm(np.array(self.w) - br[0])
+            euler_now = quaternion_to_euler(np.array(self.q)) / math.pi * 180
+            euler_ref = quaternion_to_euler(q[0]) / math.pi * 180
+            phi = round(abs(euler_now[2] - euler_ref[2])) % 360
+            error_yaw = 360 - phi if phi > 180 else phi
             if rospy.Time.now().to_sec() - self.begin_time > self.stable_time:
                 self.pose_error[self.experiment_times_current] += error_pose
                 self.pose_error_square[self.experiment_times_current] += error_pose ** 2
@@ -698,7 +703,7 @@ class QuadMPC:
             [p, v, a, j, s] = self.getRefCircleSpeedup(r, w_rate, phi, t, start_point[2])
             
         elif experiment == 'circle_vertical':
-            w = 1 # rad/s
+            w = velocity / r # rad/s
             phi = 0
             [p, v, a, j, s] = self.getRefCircleVert(r, w, phi, t, start_point[2])
             
@@ -1097,6 +1102,7 @@ class QuadMPC:
         C_drag = np.zeros((3 * len(x_data), 5))
         brDotset = np.gradient(x_data[:, 10:13], t_data, axis=0)
         Inertia = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.Inertia
+        G_mat = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.G
         for i in range(len(x_data)):
             # p = x_data[i, :3]
             v = x_data[i, 3:6]
@@ -1105,7 +1111,7 @@ class QuadMPC:
             q = x_data[i, 6:10]
             br = x_data[i, 10:13]
             brDot = brDotset[i, :]
-            temp_input = self.quadrotorOptimizer[self.experiment_times_current].quadrotorModel.G.dot(motor_data[i] ** 2)
+            temp_input = G_mat.dot(motor_data[i] ** 2)
             # f_thrust = kT * motor_data[i].dot(motor_data[i])
             f_thrust = temp_input[0]
             torque = temp_input[1:]
@@ -1119,7 +1125,7 @@ class QuadMPC:
             A_drag[i * 3: i * 3 + 3, 0] = rotMat[:,0].dot(v) * rotMat[:,0]
             A_drag[i * 3: i * 3 + 3, 1] = rotMat[:,1].dot(v) * rotMat[:,1]
             A_drag[i * 3: i * 3 + 3, 2] = rotMat[:,2].dot(v) * rotMat[:,2]
-            A_drag[i * 3: i * 3 + 3, 3] = vh.dot(vh) * rotMat[:,2]
+            A_drag[i * 3: i * 3 + 3, 3] = -vh.dot(vh) * rotMat[:,2]
             b_drag[i * 3: i * 3 + 3, 0] = f_thrust * rotMat[:,2] - mass * a
 
             C_drag[i * 3, 0] = -rotMat[:,1].dot(v)

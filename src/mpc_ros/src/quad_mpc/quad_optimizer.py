@@ -85,9 +85,10 @@ class QuadrotorOptimizer:
 
             Q = np.diag(np.concatenate((np.ones(3) * 200, np.ones(3) * 1, np.ones(3) * 5, np.ones(3) * 1)))
             # Q[2,2] = 500 # z
-            Q[8,8] = 200 # yaw
-            R = np.eye(nu) * 6 / model.RotorSpeed_max
-            Q = Q * 1
+            Q[8,8] = 10 # yaw
+            R = np.eye(nu) * 1 / model.RotorSpeed_max
+            # Q *= 0.1
+            # R *= 0.1
 
             diff_q = diff_between_q_q(acModel.x[6:10], acModel.p[6:10])[1:]
             diff_state = ca.vertcat(acModel.x[:6] - acModel.p[:6], diff_q, acModel.x[10:13] - acModel.p[10:13])

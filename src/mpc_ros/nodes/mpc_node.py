@@ -13,6 +13,9 @@ from src.utils.utils import *
 from src.quad_mpc.quad_optimizer import QuadrotorOptimizer
 from src.quad_mpc.quad_model import QuadrotorModel
 from decomp_ros_msgs.msg import PolyhedronArray
+from matplotlib.font_manager import FontProperties  # 导入FontPropertie
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 '''
 RotorS
@@ -48,7 +51,7 @@ class QuadMPC:
         self.fit_file_num = str(rospy.get_param('~fit_file_num', default='1'))
         self.result_file_num = str(rospy.get_param('~result_file_num', default='1'))
         self.expriment = rospy.get_param('~expriment', default='hover')
-        self.record_data_time = rospy.get_param('~experiment_time', default='35')
+        self.record_data_time = rospy.get_param('~record_data_time', default='35')
         self.experiment_times = rospy.get_param('~experiment_times', default='1')
         self.start_point = np.zeros(3)
         self.hover_point = np.zeros(3)
@@ -71,10 +74,7 @@ class QuadMPC:
         self.need_sim = False
         self.vel_traversal = False
         
-        if self.start_point[0] < 1:
-            self.r_circle = 10
-        else:
-            self.r_circle = self.start_point[0]
+        self.r_circle = 10 if self.start_point[0] < 1 else self.start_point[0]
 
         if self.vel_traversal:
             self.expriment = 'circle_speedup_stay'
@@ -92,9 +92,10 @@ class QuadMPC:
                 self.experiment_time = self.max_vel / (2 * self.w_rate * self.r_circle)
             else:
                 self.stable_time = 0
+                self.experiment_time = self.record_data_time
 
         if not(self.with_drag):
-            self.fit_file_num = 0
+            self.fit_file_num = '0'
         if self.cost_type == "LINEAR_LS" and self.need_collision_free:
             rospy.logwarn("cost type: LINEAR_LS can not be collision free!!! set cost type as EXTERNAL.")
             rospy.logwarn("cost type: LINEAR_LS can not be collision free!!! set cost type as EXTERNAL.")
@@ -128,21 +129,34 @@ class QuadMPC:
         self.start_record = False
         self.finish_tracking = False
         self.last_poly_time = rospy.Time.now().to_sec()
+        font = FontProperties(fname="SimHei.ttf", size=14)  # 设置字体
+        mpl.rcParams['font.family'] = 'SimHei'
+        plt.rcParams['axes.unicode_minus'] = False   # 步骤二（解决坐标轴负数的负号显示问题）
 
-        if self.expriment != "hover":
+
+        if not(self.need_collision_free):
             self.have_polyhedron = True
-            # rospy.logwarn("expriment: "+ self.expriment +" can not be Collision Free!!! set Collision Free as False.")
-            # rospy.logwarn("expriment: "+ self.expriment +" can not be Collision Free!!! set Collision Free as False.")
-            # rospy.logwarn("expriment: "+ self.expriment +" can not be Collision Free!!! set Collision Free as False.")
-            self.need_collision_free = False
+        # if self.expriment != "hover":
+        #     self.have_polyhedron = True
+        #     # rospy.logwarn("expriment: "+ self.expriment +" can not be Collision Free!!! set Collision Free as False.")
+        #     # rospy.logwarn("expriment: "+ self.expriment +" can not be Collision Free!!! set Collision Free as False.")
+        #     # rospy.logwarn("expriment: "+ self.expriment +" can not be Collision Free!!! set Collision Free as False.")
+        #     self.need_collision_free = False
+        # elif not(self.need_collision_free):
+        #     self.have_polyhedron = True
         
         # load Drag coefficient
         dir_path = os.path.dirname(os.path.realpath(__file__))
         config_dir = dir_path + '/../config'
         result_dir = dir_path + '/../result'
         # mesh_dir = dir_path + '/../mesh' self.result_file_num
-        self.result_file = os.path.join(result_dir, self.expriment + '_' + self.result_file_num + '_' + self.fit_file_num + '.txt')
-        self.yaml_file = os.path.join(config_dir, quad_name + '_' + self.drag_coeff_type + '_' + self.fit_file_num + '.yaml')
+        # exp_name = self.expriment
+        if self.with_drag:
+            drag_name = self.drag_coeff_type + '_' + self.fit_file_num
+        else:
+            drag_name = 'NONE_' + self.fit_file_num
+        self.result_file = os.path.join(result_dir, self.expriment + '_' + self.result_file_num + '_' + drag_name + '.txt')
+        self.yaml_file = os.path.join(config_dir, quad_name + '_' + drag_name + '.yaml')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
         self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
         if not(self.with_drag):
@@ -160,7 +174,7 @@ class QuadMPC:
                     Drag_A[0, 1] = config["D_ax"]
                     Drag_A[1, 0] = config["D_ay"]
                     Drag_B = np.diag([config["D_bx"], config["D_by"], config["D_bz"]])
-                    self.result_file = os.path.join(result_dir, self.expriment + '_with_drag.txt')
+                    # self.result_file = os.path.join(result_dir, self.expriment + '_with_drag.txt')
             except FileNotFoundError:
                 warn_msg = "Tried to load Drag coefficient but the file was not found. Using default Drag coefficient."
                 rospy.logwarn(warn_msg)
@@ -168,6 +182,8 @@ class QuadMPC:
                 Drag_kh = 0
                 Drag_A = np.zeros((3, 3))
                 Drag_B = np.zeros((3, 3))
+        # Drag_A = np.zeros((3, 3))
+        # Drag_B = np.zeros((3, 3))
         print(Drag_D)
         print(Drag_kh)
         print(Drag_A)
@@ -281,6 +297,7 @@ class QuadMPC:
                     self.begin_time = rospy.Time.now().to_sec()
                     self.stable_time = self.vel_list[self.experiment_times_current] / (2 * self.w_rate * self.r_circle) + 5
                     self.experiment_time = self.record_data_time + self.stable_time
+                    # np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_rmse[np.newaxis,:], self.yaw_rmse[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_a_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:], np.ones((1,self.experiment_times)) * self.crash_times), axis=0), fmt='%0.8f', delimiter=',')
                 else:
                     print("max error : ", self.pose_error_max)
                     print("mean error: ", self.pose_error_mean)
@@ -291,34 +308,46 @@ class QuadMPC:
                     print("max motor : ", self.max_motor_speed)
 
                     
-                    np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_rmse[np.newaxis,:], self.yaw_rmse[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_a_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:]), axis=0), fmt='%0.8f', delimiter=',')
+                    # np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_rmse[np.newaxis,:], self.yaw_rmse[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_a_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:], np.ones((1,self.experiment_times)) * self.crash_times), axis=0), fmt='%0.8f', delimiter=',')
                     
-                    fig=plt.figure()
-                    ax1=fig.add_subplot(2,2,1)
-                    # ax1.set_title("pose_error_max")
-                    ax1.boxplot([self.pose_error_rmse], labels=['位置均方根误差'], showmeans=True)
-                    ax1.set_ylabel("m")
-                    ax1.grid()
+                    # if self.vel_traversal:
+                    #     print()
+                    # else:
+                    #     fig=plt.figure()
+                    #     ax1=fig.add_subplot(2,2,1)
+                    #     # ax1.set_title("pose_error_max")
+                    #     # ax1.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+                    #     # ax1.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+                    #     ax1.boxplot([self.pose_error_rmse], labels=['Pose RMSE'], showmeans=True)
+                    #     ax1.set_ylabel("m")
+                    #     ax1.grid()
 
-                    ax2=fig.add_subplot(2,2,2)
-                    # ax2.set_title("pose_error_mean")
-                    ax2.boxplot([self.yaw_rmse], labels=['偏航角均方根误差'], showmeans=True)
-                    ax2.set_ylabel("m")
-                    ax2.grid()
+                    #     ax2=fig.add_subplot(2,2,2)
+                    #     # ax2.set_title("pose_error_mean")
+                    #     # ax2.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+                    #     # ax2.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+                    #     ax2.boxplot([self.yaw_rmse], labels=['Yaw RMSE'], showmeans=True)
+                    #     ax2.set_ylabel("m")
+                    #     ax2.grid()
 
-                    ax3=fig.add_subplot(2,2,3)
-                    # ax3.set_title("max_motor_speed_percent")
-                    ax3.boxplot([self.max_v_w], labels=['最大速度'], showmeans=True)
-                    ax3.set_ylabel("m/s")
-                    ax3.grid()
+                    #     ax3=fig.add_subplot(2,2,3)
+                    #     # ax3.set_title("max_motor_speed_percent")
+                    #     # ax3.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+                    #     # ax3.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+                    #     ax3.boxplot([self.max_v_w], labels=['Max Velocity'], showmeans=True)
+                    #     ax3.set_ylabel("m/s")
+                    #     ax3.grid()
 
-                    ax4=fig.add_subplot(2,2,4)
-                    # ax4.set_title("max_v_w")
-                    ax4.boxplot([self.max_motor_speed / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max], labels=['最大旋翼转速百分比'], showmeans=True)
-                    ax4.grid()
+                    #     ax4=fig.add_subplot(2,2,4)
+                    #     # ax4.set_title("max_v_w")
+                    #     # ax4.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+                    #     # ax4.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+                    #     ax4.boxplot([self.max_motor_speed / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max], labels=['Max Rotor Speed'], showmeans=True)
+                    #     ax4.set_ylabel("deg°")
+                    #     ax4.grid()
 
-                    plt.show()
-
+                    #     plt.show()
+                np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_rmse[np.newaxis,:], self.yaw_rmse[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_a_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:], np.ones((1,self.experiment_times)) * self.crash_times), axis=0), fmt='%0.8f', delimiter=',')
                 # return
             rate.sleep()
 
@@ -405,6 +434,7 @@ class QuadMPC:
         if not(self.have_odom):
             return
         self.a_w = v_dot_q(np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z]), np.array(self.q)).tolist()
+        self.a_w[2] -= 9.81
 
     def motor_speed_callback(self, msg):
         self.have_motor_speed = True
@@ -516,26 +546,29 @@ class QuadMPC:
             p, v, q, br, u = self.getReference(experiment=self.expriment, start_point=self.start_point, hover_point=self.hover_point, time_now=rospy.Time.now().to_sec() - self.begin_time, t_horizon=self.t_horizon, N_node=self.N, velocity=self.vel_list[self.experiment_times_current], model=self.quadrotorOptimizer.quadrotorModel, plot=False)
             error_pose = np.linalg.norm(np.array(self.p) - p[0])
             error_vel  = np.linalg.norm(np.array(self.v_w) - v[0])
-            euler_now = quaternion_to_euler(np.array(self.q))
-            euler_ref = quaternion_to_euler(q[0])
-            error_yaw  = abs(euler_now[2] - euler_ref[2])
+            euler_now = quaternion_to_euler(np.array(self.q)) / math.pi * 180
+            euler_ref = quaternion_to_euler(q[0]) / math.pi * 180
+            phi = round(abs(euler_now[2] - euler_ref[2])) % 360
+            self.error_yaw = 360 - phi if phi > 180 else phi
+            # print(error_yaw)
             error_q    = np.linalg.norm(diff_between_q_q(np.array(self.q), q[0]))
             error_br   = np.linalg.norm(np.array(self.w) - br[0])
             if rospy.Time.now().to_sec() - self.begin_time > self.stable_time:
                 self.pose_error[self.experiment_times_current] += error_pose
                 self.pose_error_square[self.experiment_times_current] += error_pose ** 2
-                self.yaw_error_square[self.experiment_times_current] += error_yaw ** 2
+                self.yaw_error_square[self.experiment_times_current] += self.error_yaw ** 2
                 self.pose_error_num += 1
-            self.pose_error_max[self.experiment_times_current] = max(self.pose_error_max[self.experiment_times_current], error_pose)
-            if self.expriment == 'hover':
-                if (np.linalg.norm(np.array(self.p) - self.hover_point) < 0.05):
-                    self.reach_times += 1
-                    if self.reach_times > 500:
-                        self.finish_tracking = True
-                        self.reach_times = 0    
-            elif rospy.Time.now().to_sec() - self.begin_time >= self.experiment_time:
+                self.pose_error_max[self.experiment_times_current] = max(self.pose_error_max[self.experiment_times_current], error_pose)
+            # if self.expriment == 'hover':
+            #     if (np.linalg.norm(np.array(self.p) - self.hover_point) < 0.05):
+            #         self.reach_times += 1
+            #         if self.reach_times > 500:
+            #             self.finish_tracking = True
+            #             self.reach_times = 0    
+            if rospy.Time.now().to_sec() - self.begin_time >= self.experiment_time:
                 self.finish_tracking = True
-            elif (self.pose_error_max[self.experiment_times_current] > 2.1):
+            elif (error_pose > 2.1):
+                self.pose_error_max[self.experiment_times_current] = error_pose
                 self.finish_tracking = True
         else:
             self.trigger = False
@@ -653,7 +686,7 @@ class QuadMPC:
                 for i in range(len(p)):
                     yaw[i] = math.atan2(v[i, 1], v[i, 0])
         else:
-            yaw[:] = 0
+            yaw[:] = math.pi
             # if i == 1:
             #     if yaw[i] < -2.8 and yaw[i - 1] > 2.8:
             #         yawdot[i - 1] = (yaw[i] + 2 * np.pi - yaw[i - 1]) / dt
@@ -1172,9 +1205,10 @@ class QuadMPC:
         self.desire_pub.publish(desire)
 
         max_motor_speed_now = np.max(self.motor_speed) if self.have_motor_speed else 0
-        self.max_motor_speed[self.experiment_times_current] = max(self.max_motor_speed[self.experiment_times_current], max_motor_speed_now)
-        self.max_v_w[self.experiment_times_current] = max(self.max_v_w[self.experiment_times_current], vw_abs)
-        self.max_a_w[self.experiment_times_current] = max(self.max_a_w[self.experiment_times_current], aw_abs)
+        if rospy.Time.now().to_sec() - self.begin_time > self.stable_time:
+            self.max_motor_speed[self.experiment_times_current] = max(self.max_motor_speed[self.experiment_times_current], max_motor_speed_now)
+            self.max_v_w[self.experiment_times_current] = max(self.max_v_w[self.experiment_times_current], vw_abs)
+            self.max_a_w[self.experiment_times_current] = max(self.max_a_w[self.experiment_times_current], aw_abs)
 
         desire_motor = Actuators()
         desire_motor.angular_velocities = u[0]
@@ -1192,7 +1226,7 @@ class QuadMPC:
             print("vel:         [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(self.v_w[0], self.v_w[1], self.v_w[2], vw_abs))
             print("pose error:  [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(p[0, 0] - self.p[0], p[0, 1] - self.p[1], p[0, 2] - self.p[2], error_pose))
             print("pose rmse:   [{:.3f}]".format(math.sqrt(self.pose_error_square[self.experiment_times_current] / self.pose_error_num)))
-            print("yaw rmse:    [{:.3f}]".format(math.sqrt(self.yaw_error_square[self.experiment_times_current] / self.pose_error_num)))
+            print("yaw rmse:    [{:.3f}], {:.3f}".format(math.sqrt(self.yaw_error_square[self.experiment_times_current] / self.pose_error_num), self.error_yaw))
             print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max * 100))
             print()
 
