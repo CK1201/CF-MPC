@@ -73,23 +73,36 @@ class QuadMPC:
         self.selectStrategy = "one" # all one pred_one (inside)
         self.need_sim = False
         self.vel_traversal = False
+        self.wrate_traversal = False
         
-        self.r_circle = 10 if self.start_point[0] < 1 else self.start_point[0]
+        self.r_circle = 5 if self.start_point[0] < 1 else self.start_point[0]
 
         if self.vel_traversal:
+            self.wrate_traversal = False
             self.expriment = 'circle_speedup_stay'
-            self.vel_list = np.arange(1, self.max_vel + 1)
+            # self.vel_list = np.arange(1, self.max_vel + 1)
+            self.vel_list = np.arange(2, self.max_vel + 0.0001, 2)
             self.experiment_times = len(self.vel_list)
-            self.stable_time = self.vel_list[0] / (2 * self.w_rate * self.r_circle) + 5
+            self.wrate_list = np.ones(self.experiment_times) * self.w_rate
+            self.stable_time = self.vel_list[0] / (2 * self.wrate_list[0] * self.r_circle) + 5
             self.experiment_time = self.record_data_time + self.stable_time
+        elif self.wrate_traversal:
+            self.expriment = 'circle_speedup'
+            self.wrate_list = np.arange(0.05, self.w_rate + 0.0001, 0.05)
+            self.experiment_times = len(self.wrate_list)
+            self.vel_list = np.ones(self.experiment_times) * self.max_vel
+            self.stable_time = 0
+            self.experiment_time = self.vel_list[0] / (2 * self.wrate_list[0] * self.r_circle)
         else:
             self.vel_list = np.ones(self.experiment_times) * self.max_vel
+            self.wrate_list = np.ones(self.experiment_times) * self.w_rate
             if self.expriment == 'circle_speedup_stay':
                 self.stable_time = self.max_vel / (2 * self.w_rate * self.r_circle) + 5
                 self.experiment_time = self.record_data_time + self.stable_time
             elif self.expriment == 'circle_speedup':
                 self.stable_time = 0
                 self.experiment_time = self.max_vel / (2 * self.w_rate * self.r_circle)
+                # self.experiment_time = 2 / self.w_rate
             else:
                 self.stable_time = 0
                 self.experiment_time = self.record_data_time
@@ -116,7 +129,8 @@ class QuadMPC:
         self.max_v_w = np.zeros(self.experiment_times)
         self.max_a_w = np.zeros(self.experiment_times)
         self.max_motor_speed = np.zeros(self.experiment_times)
-        self.crash_times = 0
+        self.crash_times = np.zeros(self.experiment_times)
+        # self.crash_times = 0
         self.reach_times = 0
         self.a_data = None
         self.have_odom = False
@@ -274,7 +288,7 @@ class QuadMPC:
                 #     draw_data_sim(self.x_data, x_sim, self.motor_data, self.t_data - self.begin_time)
                 rospy.sleep(3.0)
                 if self.pose_error_max[self.experiment_times_current] > 2:
-                    self.crash_times += 1
+                    self.crash_times[self.experiment_times_current] += 1
 
                     self.pose_error[self.experiment_times_current] = 0
                     self.pose_error_max[self.experiment_times_current] = 0
@@ -295,8 +309,14 @@ class QuadMPC:
                 if (self.experiment_times_current < self.experiment_times):
                     self.trigger = True
                     self.begin_time = rospy.Time.now().to_sec()
-                    self.stable_time = self.vel_list[self.experiment_times_current] / (2 * self.w_rate * self.r_circle) + 5
-                    self.experiment_time = self.record_data_time + self.stable_time
+                    if self.expriment != "hover":
+                        self.stable_time = 0
+                        self.experiment_time = self.vel_list[self.experiment_times_current] / (2 * self.wrate_list[self.experiment_times_current] * self.r_circle)
+                        if not(self.wrate_traversal):
+                            self.stable_time = self.experiment_time + 5
+                            self.experiment_time = self.record_data_time + self.stable_time
+                        
+                    
                     # np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_rmse[np.newaxis,:], self.yaw_rmse[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_a_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:], np.ones((1,self.experiment_times)) * self.crash_times), axis=0), fmt='%0.8f', delimiter=',')
                 else:
                     print("max error : ", self.pose_error_max)
@@ -347,7 +367,7 @@ class QuadMPC:
                     #     ax4.grid()
 
                     #     plt.show()
-                np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_rmse[np.newaxis,:], self.yaw_rmse[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_a_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:], np.ones((1,self.experiment_times)) * self.crash_times), axis=0), fmt='%0.8f', delimiter=',')
+                np.savetxt(self.result_file, np.concatenate((self.pose_error_max[np.newaxis,:], self.pose_error_rmse[np.newaxis,:], self.yaw_rmse[np.newaxis,:], self.max_v_w[np.newaxis,:], self.max_a_w[np.newaxis,:], self.max_motor_speed[np.newaxis,:], self.crash_times[np.newaxis,:]), axis=0), fmt='%0.8f', delimiter=',')
                 # return
             rate.sleep()
 
@@ -567,7 +587,7 @@ class QuadMPC:
             #             self.reach_times = 0    
             if rospy.Time.now().to_sec() - self.begin_time >= self.experiment_time:
                 self.finish_tracking = True
-            elif (error_pose > 2.1):
+            elif (error_pose > 2.1) and self.expriment != 'hover':
                 self.pose_error_max[self.experiment_times_current] = error_pose
                 self.finish_tracking = True
         else:
@@ -636,12 +656,10 @@ class QuadMPC:
 
         elif experiment == 'circle_speedup_stay':
             w = velocity / r
-            w_rate = self.w_rate
+            w_rate = self.wrate_list[self.experiment_times_current]
             phi = 0
             stable_time = self.stable_time - 5
             stable_phi = w_rate * stable_time ** 2 + phi
-
-
             for i in range(N_node + 1):
                 # if w_rate * t[i] ** 2 < w * t[i]:
                 if t[i] < stable_time:
@@ -652,14 +670,29 @@ class QuadMPC:
                     [p[i], v[i], a[i], j[i], s[i]] = self.getRefCircleHor(r, w, stable_phi, temp_t, start_point[2])
 
         elif experiment == 'circle_speedup':
-            w_rate = self.w_rate
+            w_rate = self.wrate_list[self.experiment_times_current]
             phi = 0
             [p, v, a, j, s] = self.getRefCircleSpeedup(r, w_rate, phi, t, start_point[2])
             
         elif experiment == 'circle_vertical':
-            w = 1 # rad/s
+            w = velocity / r # rad/s
             phi = 0
             [p, v, a, j, s] = self.getRefCircleVert(r, w, phi, t, start_point[2])
+        
+        elif experiment == 'circle_vertical_speedup_stay':
+            w = velocity / r
+            w_rate = self.wrate_list[self.experiment_times_current]
+            phi = 0
+            stable_time = self.stable_time - 5
+            stable_phi = w_rate * stable_time ** 2 + phi
+            for i in range(N_node + 1):
+                # if w_rate * t[i] ** 2 < w * t[i]:
+                if t[i] < stable_time:
+                    temp_t = np.ones((1,1)) * t[i]
+                    [p[i], v[i], a[i], j[i], s[i]] = self.getRefCircleSpeedup(r, w_rate, phi, temp_t, start_point[2])
+                else:
+                    temp_t = np.ones((1,1)) * (t[i] - stable_time)
+                    [p[i], v[i], a[i], j[i], s[i]] = self.getRefCircleVert(r, w, stable_phi, temp_t, start_point[2])
 
         elif experiment == 'lemniscate':
             w = 0.5
@@ -686,7 +719,7 @@ class QuadMPC:
                 for i in range(len(p)):
                     yaw[i] = math.atan2(v[i, 1], v[i, 0])
         else:
-            yaw[:] = math.pi
+            yaw[:] = math.pi * 0
             # if i == 1:
             #     if yaw[i] < -2.8 and yaw[i - 1] > 2.8:
             #         yawdot[i - 1] = (yaw[i] + 2 * np.pi - yaw[i - 1]) / dt
@@ -1213,7 +1246,7 @@ class QuadMPC:
         desire_motor = Actuators()
         desire_motor.angular_velocities = u[0]
         if self.a_data is not(None):
-            desire_motor.angles = np.array([error_pose, error_vel, max_motor_speed_now, self.max_motor_speed[self.experiment_times_current], vw_abs, self.a_data[-1, 0], self.a_data[-1, 1], self.a_data[-1, 2] - 9.81, self.v_w[0], self.v_w[1], self.v_w[2]])
+            desire_motor.angles = np.array([error_pose, error_vel, max_motor_speed_now, self.max_motor_speed[self.experiment_times_current], vw_abs, aw_abs, self.a_w[0], self.a_w[1], self.a_w[2], self.v_w[0], self.v_w[1], self.v_w[2]])
         self.desire_motor_pub.publish(desire_motor)
 
         self.print_cnt += 1
@@ -1225,8 +1258,9 @@ class QuadMPC:
             print("pose:        [{:.2f}, {:.2f}, {:.2f}]".format(self.p[0], self.p[1], self.p[2]))
             print("vel:         [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(self.v_w[0], self.v_w[1], self.v_w[2], vw_abs))
             print("pose error:  [{:.2f}, {:.2f}, {:.2f}], norm = {:.2f}".format(p[0, 0] - self.p[0], p[0, 1] - self.p[1], p[0, 2] - self.p[2], error_pose))
-            print("pose rmse:   [{:.3f}]".format(math.sqrt(self.pose_error_square[self.experiment_times_current] / self.pose_error_num)))
-            print("yaw rmse:    [{:.3f}], {:.3f}".format(math.sqrt(self.yaw_error_square[self.experiment_times_current] / self.pose_error_num), self.error_yaw))
+            pose_error_num = 1 if self.pose_error_num == 0 else self.pose_error_num
+            print("pose rmse:   [{:.3f}]".format(math.sqrt(self.pose_error_square[self.experiment_times_current] / pose_error_num)))
+            print("yaw rmse:    [{:.3f}], {:.3f}".format(math.sqrt(self.yaw_error_square[self.experiment_times_current] / pose_error_num), self.error_yaw))
             print("max motor :  {:.2f}, {:.2f}%".format(max_motor_speed_now, max_motor_speed_now / self.quadrotorOptimizer.quadrotorModel.model.RotorSpeed_max * 100))
             print()
 

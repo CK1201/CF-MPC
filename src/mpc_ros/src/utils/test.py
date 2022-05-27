@@ -25,22 +25,22 @@ import matplotlib.pyplot as plt
 # 5 10m/s
 # 6 15m/s
 
-drag_file = '../../config/NM_coeff_1.npz'
-fit_size = 5
-A = np.zeros((fit_size,3,3))
-B = np.zeros((fit_size,3,3))
-D = np.zeros((fit_size,3,3))
-A_coeff = np.random.rand(fit_size,2) * 0.01
-B_coeff = np.random.rand(fit_size,3) * 0.01
-D_coeff = np.random.rand(fit_size,3) * 0.3
-D_coeff[:,2] = D_coeff[:,2] * 0.1
-kh = np.random.rand(fit_size,1) * 0.01
-for i in range(fit_size):
-    A[i, 0, 1] = A_coeff[i, 0]
-    A[i, 1, 0] = A_coeff[i, 1]
-    B[i] = np.diag(B_coeff[i])
-    D[i] = np.diag(D_coeff[i])
-np.savez(drag_file,A=A,B=B,D=D,kh=kh)
+# drag_file = '../../config/NM_coeff_1.npz'
+# fit_size = 5
+# A = np.zeros((fit_size,3,3))
+# B = np.zeros((fit_size,3,3))
+# D = np.zeros((fit_size,3,3))
+# A_coeff = np.random.rand(fit_size,2) * 0.01
+# B_coeff = np.random.rand(fit_size,3) * 0.01
+# D_coeff = np.random.rand(fit_size,3) * 0.3
+# D_coeff[:,2] = D_coeff[:,2] * 0.1
+# kh = np.random.rand(fit_size,1) * 0.01
+# for i in range(fit_size):
+#     A[i, 0, 1] = A_coeff[i, 0]
+#     A[i, 1, 0] = A_coeff[i, 1]
+#     B[i] = np.diag(B_coeff[i])
+#     D[i] = np.diag(D_coeff[i])
+# np.savez(drag_file,A=A,B=B,D=D,kh=kh)
 
 
 # Drag = np.load('../../config/NM_coeff_2_all_for_now_.npz')
@@ -90,3 +90,5 @@ np.savez(drag_file,A=A,B=B,D=D,kh=kh)
 # fig=plt.figure()
 # plt.plot(fun_val[:,0])
 # plt.show()
+
+print(np.arange(0.2, 1.0001, 0.2))

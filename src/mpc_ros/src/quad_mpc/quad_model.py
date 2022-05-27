@@ -7,7 +7,8 @@ class QuadrotorModel:
     def __init__(self, quad_name='hummingbird', configuration='+', Drag_D=np.zeros((3, 3)), Drag_kh=0, Drag_A=np.zeros((3, 3)), Drag_B=np.zeros((3, 3)), need_collision_free=False, useTwoPolyhedron=False) -> None:
 
         this_path = os.path.dirname(os.path.realpath(__file__))
-        params_file = os.path.join(this_path, '..', '..', 'xacro', quad_name + '.xacro')
+        params_file = os.path.join(this_path, '..', '..', 'xacro', f'{quad_name}.xacro')
+
 
         # Get parameters for drone
         attrib = parse_xacro_file(params_file)
@@ -67,7 +68,7 @@ class QuadrotorModel:
 
         RotationMat = quat_to_rotation_matrix(unit_quat(Orientation))
 
-        quad_length = self.arm_length + self.radius_rotor + 0.00
+        quad_length = self.arm_length + self.radius_rotor + 0.05
         height = self.body_height / 2
         self.model.boxVertexNp = np.array([[quad_length, 0, -height],
                             [quad_length, 0, height],
@@ -97,10 +98,12 @@ class QuadrotorModel:
 
         # parameters
         self.model.MaxNumOfPolyhedrons = 10 if self.need_collision_free else 0
-        if useTwoPolyhedron:
-            param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4 * 2, 1)
-        else:
-            param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
+        MaxNum = self.model.MaxNumOfPolyhedrons * 4 * 2 if useTwoPolyhedron else self.model.MaxNumOfPolyhedrons * 4
+        param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + MaxNum, 1)
+        # if useTwoPolyhedron:
+        #     param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4 * 2, 1)
+        # else:
+        #     param = ca.SX.sym("param", x.size()[0] + RotorSpeed.size()[0] + self.model.MaxNumOfPolyhedrons * 4, 1)
 
 
 

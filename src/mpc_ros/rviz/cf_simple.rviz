@@ -26,7 +26,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: OctoMap_Center
+    SyncSource: GridMap
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -302,7 +302,7 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 2.049999952316284
+        Max Value: 2.3499999046325684
         Min Value: 0.15000000596046448
         Value: true
       Axis: Z
@@ -336,21 +336,21 @@ Visualization Manager:
       Queue Size: 1
       Value: true
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /hummingbird/quad_traj
       Name: QuadTraj
       Namespaces:
         {}
       Queue Size: 100
-      Value: true
+      Value: false
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /hummingbird/mpc_ref
       Name: MPCRef
       Namespaces:
         {}
       Queue Size: 100
-      Value: true
+      Value: false
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /hummingbird/quad_box
@@ -394,18 +394,18 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 5.172171592712402
-        Y: -0.5493924617767334
-        Z: 0.6917104721069336
+        X: 5.701639175415039
+        Y: 0.08701389282941818
+        Z: 0.22632408142089844
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.0747979879379272
+      Pitch: 0.8747981786727905
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.5772470235824585
+      Yaw: 6.280433654785156
     Saved: ~
 Window Geometry:
   Displays:

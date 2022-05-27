@@ -1,21 +1,21 @@
 <launch>
     <arg name="mav_name" default="hummingbird"/>
-    <arg name="use_drag_coeff" default="true"/>
+    <arg name="use_drag_coeff" default="false"/>
     <arg name="drag_coeff_type" default="LFS"/> <!-- LFS, NM -->
     <arg name="fit_file_num" default="4"/>
     <arg name="result_file_num" default="6"/>
     <arg name="heading" default="true"/>
-    <arg name="experiment_times" default="10"/>
+    <arg name="experiment_times" default="1"/>
 
 
 
-    <arg name="w_rate" default="0.1"/>
-    <arg name="max_vel" default="10.0"/>
+    <arg name="max_w_rate" default="0.05"/>
+    <arg name="max_vel" default="12.0"/>
     
     
     <arg name="need_collision_free" default="false"/>
     <arg name="use_prior" default="true"/>
-    <arg name="poly_offset" default="0.00"/>
+    <arg name="poly_offset" default="0.02"/>
 
     <arg name="expriment" default="circle_speedup_stay"/>
     <arg name="start_x" default="5"/>
@@ -30,11 +30,11 @@
     <!-- <arg name="expriment" default="hover"/>
     <arg name="start_x" default="0"/>
     <arg name="start_y" default="0"/>
-    <arg name="start_z" default="5"/> -->
+    <arg name="start_z" default="1"/> -->
 
     <arg name="hover_x" default="0"/>
     <arg name="hover_y" default="0"/>
-    <arg name="hover_z" default="5"/>
+    <arg name="hover_z" default="1"/>
 
     <arg name="cost_type" default="EXTERNAL"/>   <!-- obs_free needs cost_type to be EXTERNAL.  EXTERNAL, LINEAR_LS -->
     <arg name="plot" default="false"/>
@@ -79,7 +79,7 @@
         <param name="use_prior" value="$(arg use_prior)"/>
         <param name="poly_offset" value="$(arg poly_offset)"/>
         <param name="max_vel" value="$(arg max_vel)"/>
-        <param name="w_rate" value="$(arg w_rate)"/>
+        <param name="w_rate" value="$(arg max_w_rate)"/>
         <param name="heading" value="$(arg heading)"/>
     </node>
 

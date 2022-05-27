@@ -26,7 +26,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: OctoMap_Center
+    SyncSource: ""
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -302,7 +302,7 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 2.049999952316284
+        Max Value: 1.25
         Min Value: 0.15000000596046448
         Value: true
       Axis: Z
@@ -332,33 +332,33 @@ Visualization Manager:
       Marker Topic: /hummingbird/quad_odom
       Name: QuadOdom
       Namespaces:
-        mesh: true
+        {}
       Queue Size: 1
       Value: true
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /hummingbird/quad_traj
       Name: QuadTraj
       Namespaces:
         {}
       Queue Size: 100
-      Value: true
+      Value: false
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /hummingbird/mpc_ref
       Name: MPCRef
       Namespaces:
         {}
       Queue Size: 100
-      Value: true
+      Value: false
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /hummingbird/quad_box
       Name: QuadBox
       Namespaces:
-        quad_box: true
+        {}
       Queue Size: 100
-      Value: true
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 238; 238; 236
@@ -387,25 +387,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 12.365508079528809
+      Distance: 18.901029586791992
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 5.172171592712402
-        Y: -0.5493924617767334
-        Z: 0.6917104721069336
+        X: 0.054053694009780884
+        Y: 1.2279051542282104
+        Z: 7.142581939697266
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.0747979879379272
+      Pitch: 0.5947984457015991
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.5772470235824585
+      Yaw: 4.417237281799316
     Saved: ~
 Window Geometry:
   Displays:

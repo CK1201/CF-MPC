@@ -85,10 +85,10 @@ class QuadrotorOptimizer:
 
             Q = np.diag(np.concatenate((np.ones(3) * 200, np.ones(3) * 1, np.ones(3) * 5, np.ones(3) * 1)))
             # Q[2,2] = 500 # z
-            Q[8,8] = 10 # yaw
+            Q[8,8] = 100 # yaw
             R = np.eye(nu) * 1 / model.RotorSpeed_max
-            # Q *= 0.1
-            # R *= 0.1
+            Q *= 0.1
+            R *= 0.1
 
             diff_q = diff_between_q_q(acModel.x[6:10], acModel.p[6:10])[1:]
             diff_state = ca.vertcat(acModel.x[:6] - acModel.p[:6], diff_q, acModel.x[10:13] - acModel.p[10:13])
@@ -101,7 +101,7 @@ class QuadrotorOptimizer:
 
             if self.quadrotorModel.need_collision_free:
                 # SafetyWeight = Q[2,2] * 10
-                SafetyWeight = 200 * 5
+                SafetyWeight = 200 * 1
                 SafetyCost = 0
                 if self.quadrotorModel.useTwoPolyhedron:
                     for i in range(model.boxVertex.size()[1]):
@@ -185,11 +185,11 @@ class QuadrotorOptimizer:
         # self.ocp.solver_options.nlp_solver_max_iter = 200 # default: 100
         # self.ocp.solver_options.tol = 1e-4 
         # self.ocp.solver_options.nlp_solver_tol_comp = 1e-1 
-        self.ocp.solver_options.qp_solver_warm_start = 1
+        self.ocp.solver_options.qp_solver_warm_start = 2
 
 
         # create solver
-        json_file = os.path.join('./' + model.name + '_' + str(num) + '_acados_ocp.json')
+        json_file = os.path.join(f'./{model.name}_{str(num)}_acados_ocp.json')
         if os.path.exists(json_file):
             print(f"remove {json_file}")
             os.remove(json_file)
