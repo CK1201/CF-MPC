@@ -10,29 +10,29 @@
 
 
     <arg name="max_w_rate" default="0.05"/>
-    <arg name="max_vel" default="12.0"/>
+    <arg name="max_vel" default="1.0"/>
     
     
-    <arg name="need_collision_free" default="false"/>
+    <arg name="need_collision_free" default="true"/>
     <arg name="use_prior" default="true"/>
     <arg name="poly_offset" default="0.02"/>
 
-    <arg name="expriment" default="circle_speedup_stay"/>
+    <!-- <arg name="expriment" default="circle_speedup_stay"/>
     <arg name="start_x" default="5"/>
     <arg name="start_y" default="0"/>
-    <arg name="start_z" default="10"/>
+    <arg name="start_z" default="10"/> -->
 
     <!-- <arg name="expriment" default="circle_vertical"/>
     <arg name="start_x" default="5"/>
     <arg name="start_y" default="0"/>
     <arg name="start_z" default="10"/> -->
     
-    <!-- <arg name="expriment" default="hover"/>
+    <arg name="expriment" default="hover"/>
     <arg name="start_x" default="0"/>
     <arg name="start_y" default="0"/>
-    <arg name="start_z" default="1"/> -->
+    <arg name="start_z" default="1"/>
 
-    <arg name="hover_x" default="0"/>
+    <arg name="hover_x" default="10"/>
     <arg name="hover_y" default="0"/>
     <arg name="hover_z" default="1"/>
 

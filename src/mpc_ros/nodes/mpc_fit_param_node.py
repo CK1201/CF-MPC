@@ -81,7 +81,7 @@ class QuadMPC:
         self.NM_fun_val_file = os.path.join(config_dir, NM_file + '_fun_val' + '.npz')
         self.Drag_coeff_all_for_now_file = os.path.join(config_dir, NM_file + '_all_for_now' + '.npz')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
-        self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
+        self.mesh_file = "file:///home/ck1201/workspace/MAS/CF-MPC/src/mpc_ros/mesh/hummingbird.mesh"
         if self.fit_method == "LFS":
             self.cal_type = "LFS"
             # message filter

@@ -1,6 +1,8 @@
 import math, pyquaternion
 import numpy as np
 import matplotlib.pyplot as plt
+from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped
 # from src.utils.utils import diff_between_q_q
 # a = np.arange(12).reshape((4,3))
 # print(a)
@@ -91,4 +93,11 @@ import matplotlib.pyplot as plt
 # plt.plot(fun_val[:,0])
 # plt.show()
 
-print(np.arange(0.2, 1.0001, 0.2))
+# print(np.arange(0.2, 1.0001, 0.2))
+
+
+path = Path()
+pose = PoseStamped()
+pose.pose.position.x = 1
+path.poses.append(pose)
+print(path.poses[0].pose.position)

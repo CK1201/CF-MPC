@@ -172,7 +172,7 @@ class QuadMPC:
         self.result_file = os.path.join(result_dir, self.expriment + '_' + self.result_file_num + '_' + drag_name + '.txt')
         self.yaml_file = os.path.join(config_dir, quad_name + '_' + drag_name + '.yaml')
         # self.mesh_file = os.path.join("file://", mesh_dir, quad_name + '.mesh')
-        self.mesh_file = "file:///home/ck1201/workspace/MAS/Traj_Tracking_MPC/src/mpc_ros/mesh/hummingbird.mesh"
+        self.mesh_file = "file:///home/ck1201/workspace/MAS/CF-MPC/src/mpc_ros/mesh/hummingbird.mesh"
         if not(self.with_drag):
             Drag_D = np.zeros((3, 3))
             Drag_kh = 0
@@ -545,6 +545,7 @@ class QuadMPC:
                     if self.need_collision_free:
                         self.polyhedrons = self.PolyhedronArray.polyhedrons
                         self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
+                        self.Path_in_use = self.Path
                         self.path_in_use_pub.publish(self.Path)
                         self.max_select = 0
                     if self.need_sim:
@@ -1048,6 +1049,7 @@ class QuadMPC:
                 self.last_poly_time = rospy.Time.now().to_sec()
                 self.polyhedrons = self.PolyhedronArray.polyhedrons
                 self.polyhedron_array_in_use_pub.publish(self.PolyhedronArray)
+                self.Path_in_use = self.Path
                 self.path_in_use_pub.publish(self.Path)
 
         if self.selectStrategy == "all":
@@ -1151,8 +1153,11 @@ class QuadMPC:
         """
         self.quadrotorOptimizer.acados_solver.set(0, "lbx", self.x0)
         self.quadrotorOptimizer.acados_solver.set(0, "ubx", self.x0)
-        if self.need_collision_free:
-            paramPolyhedron = self.getPolyhedronParam()
+        # if self.need_collision_free:
+        #     paramPolyhedron = self.getPolyhedronParam()
+        # print(len(self.Path_in_use.poses))
+        # print(len(self.Path_in_use.poses))
+        # print(len(self.polyhedrons))
         for i in range(self.N):
             yref = np.concatenate((p[i], v[i], q[i], br[i], u[i]))
             if self.quadrotorOptimizer.ocp.cost.cost_type == "LINEAR_LS":
@@ -1163,6 +1168,35 @@ class QuadMPC:
             elif self.quadrotorOptimizer.ocp.cost.cost_type == "EXTERNAL":
                 param = yref
                 if self.need_collision_free:
+
+                    # ONE ONE
+                    flag = False
+                    paramPolyhedron = np.array([])
+                    ref_normal = p[i + 1] - p[i]
+                    # find nearest poly
+                    for j in range(len(self.Path_in_use.poses) - 1):
+                        dir1 = np.array([self.Path_in_use.poses[j].pose.position.x, self.Path_in_use.poses[j].pose.position.y, self.Path_in_use.poses[j].pose.position.z]) - p[i]
+                        dir2 = np.array([self.Path_in_use.poses[j + 1].pose.position.x, self.Path_in_use.poses[j].pose.position.y, self.Path_in_use.poses[j].pose.position.z]) - p[i]
+                        if ref_normal.dot(dir1) * ref_normal.dot(dir2) < 0:
+                            flag = True
+                            selectedPolyhedron = self.polyhedrons[j]
+                            break
+                    # get poly param
+                    for j in range(self.quadrotorOptimizer.quadrotorModel.model.MaxNumOfPolyhedrons):
+                        if flag:
+                            if j < len(selectedPolyhedron.points):
+                                temp = selectedPolyhedron.points[j]
+                                point = np.array([temp.x, temp.y, temp.z])
+                                temp = selectedPolyhedron.normals[j]
+                                normal = np.array([temp.x, temp.y, temp.z])
+                                # b = normal.dot(point)
+                                b = normal.dot(point - normal / np.linalg.norm(normal) * self.poly_offset)
+                                paramPolyhedron = np.concatenate((paramPolyhedron, normal, np.array([b])))
+                            else:
+                                paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
+                        else:
+                            paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
+
                     param = np.concatenate((param, paramPolyhedron))
                 self.quadrotorOptimizer.acados_solver.set(i, 'p', param)
 
@@ -1172,6 +1206,31 @@ class QuadMPC:
         elif self.quadrotorOptimizer.ocp.cost.cost_type_e == "EXTERNAL":
             param = np.concatenate((xref, np.zeros(self.quadrotorOptimizer.quadrotorModel.model.u.size()[0])))
             if self.need_collision_free:
+                flag = False
+                paramPolyhedron = np.array([])
+                ref_normal = p[self.N] - p[self.N - 1]
+                for j in range(len(self.Path_in_use.poses) - 1):
+                    dir1 = np.array([self.Path_in_use.poses[j].pose.position.x, self.Path_in_use.poses[j].pose.position.y, self.Path_in_use.poses[j].pose.position.z]) - p[i]
+                    dir2 = np.array([self.Path_in_use.poses[j+1].pose.position.x, self.Path_in_use.poses[j+1].pose.position.y, self.Path_in_use.poses[j+1].pose.position.z]) - p[i]
+                    if ref_normal.dot(dir1) * ref_normal.dot(dir2) < 0:
+                        flag = True
+                        selectedPolyhedron = self.polyhedrons[j]
+                        break
+                # get poly param
+                for j in range(self.quadrotorOptimizer.quadrotorModel.model.MaxNumOfPolyhedrons):
+                    if flag:
+                        if j < len(selectedPolyhedron.points):
+                            temp = selectedPolyhedron.points[j]
+                            point = np.array([temp.x, temp.y, temp.z])
+                            temp = selectedPolyhedron.normals[j]
+                            normal = np.array([temp.x, temp.y, temp.z])
+                            # b = normal.dot(point)
+                            b = normal.dot(point - normal / np.linalg.norm(normal) * self.poly_offset)
+                            paramPolyhedron = np.concatenate((paramPolyhedron, normal, np.array([b])))
+                        else:
+                            paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
+                    else:
+                        paramPolyhedron = np.concatenate((paramPolyhedron, np.array([0, 0, -1, 0])))
                 param = np.concatenate((param, paramPolyhedron))
             self.quadrotorOptimizer.acados_solver.set(self.N, 'p', param)
         
